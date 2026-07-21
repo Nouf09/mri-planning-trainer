@@ -10,6 +10,8 @@ export function usePlanningSession() {
 
   const [selectedProtocol, setSelectedProtocol] = useState("T1 MPRAGE");
 
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+
   const updateParam = useCallback((key: keyof ScanParams, value: number) => {
     if (key === "sliceCount") {
       // Manual slice count edit disables auto-adjust
@@ -47,14 +49,20 @@ export function usePlanningSession() {
     setAutoAdjustSliceCount((prev) => !prev);
   }, []);
 
+  const selectCase = useCallback((caseId: string | null) => {
+    setSelectedCaseId(caseId);
+  }, []);
+
   return {
     params,
     planning,
     autoAdjustSliceCount,
     selectedProtocol,
+    selectedCaseId,
     updateParam,
     selectProtocol,
     updatePlanning,
     toggleAutoAdjustSliceCount,
+    selectCase,
   };
 }

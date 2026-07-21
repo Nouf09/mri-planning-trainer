@@ -11,10 +11,12 @@ const Index = () => {
     planning,
     autoAdjustSliceCount,
     selectedProtocol,
+    selectedCaseId,
     updateParam,
     selectProtocol,
     updatePlanning,
     toggleAutoAdjustSliceCount,
+    selectCase,
   } = usePlanningSession();
 
   return (
@@ -41,7 +43,7 @@ const Index = () => {
         </div>
       </header>
 
-      <ClinicalCasePanel />
+      <ClinicalCasePanel selectedCaseId={selectedCaseId} onSelectCase={selectCase} />
       <div className="flex-1 flex min-h-0">
         <ProtocolSidebar selected={selectedProtocol} onSelect={selectProtocol} />
         <main className="flex-1 grid grid-cols-3 gap-1 p-1 min-h-0 bg-console-dark">

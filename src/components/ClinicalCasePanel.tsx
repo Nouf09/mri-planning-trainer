@@ -1,11 +1,14 @@
-import { useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Stethoscope, Lightbulb } from "lucide-react";
 import { cases } from "@/features/training-cases/data/training-cases";
 
-export function ClinicalCasePanel() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selectedCase = cases.find((c) => c.id === selectedId);
+interface ClinicalCasePanelProps {
+  selectedCaseId: string | null;
+  onSelectCase: (caseId: string | null) => void;
+}
+
+export function ClinicalCasePanel({ selectedCaseId, onSelectCase }: ClinicalCasePanelProps) {
+  const selectedCase = cases.find((c) => c.id === selectedCaseId);
 
   return (
     <div className="border-b border-border bg-console-panel px-4 py-2 flex-shrink-0">
@@ -14,7 +17,7 @@ export function ClinicalCasePanel() {
           <Stethoscope className="h-3.5 w-3.5 text-primary" />
           <span className="font-mono text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">Training Case</span>
         </div>
-        <Select value={selectedId ?? ""} onValueChange={(v) => setSelectedId(v || null)}>
+        <Select value={selectedCaseId ?? ""} onValueChange={(v) => onSelectCase(v || null)}>
           <SelectTrigger className="h-7 w-[260px] text-[11px] font-mono bg-console-dark border-border">
             <SelectValue placeholder="Select a clinical case…" />
           </SelectTrigger>
