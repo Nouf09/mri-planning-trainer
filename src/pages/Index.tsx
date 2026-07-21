@@ -4,42 +4,10 @@ import { MedicalViewport } from "@/components/MedicalViewport";
 import { ParametersPanel } from "@/components/ParametersPanel";
 import { ClinicalCasePanel } from "@/components/ClinicalCasePanel";
 import { Activity } from "lucide-react";
+import type { ScanParams, PlanningState } from "@/features/planning/domain/planning.types";
+import { defaultParams } from "@/features/planning/state/planning.initial-state";
+import { protocolPresets } from "@/features/protocols/data/protocol-presets";
 
-export interface ScanParams {
-  fovRead: number;
-  fovPhase: number;
-  sliceThickness: number;
-  sliceGap: number;
-  sliceCount: number;
-  angulation: number;
-  tr: number;
-  te: number;
-  flipAngle: number;
-}
-
-export interface PlanningState {
-  centerX: number;
-  centerY: number;
-}
-
-const protocolPresets: Record<string, Partial<ScanParams>> = {
-  "T1 MPRAGE": { tr: 400, te: 5, flipAngle: 90 },
-  "T2 FLAIR": { tr: 9000, te: 90, flipAngle: 150 },
-  "DWI": { tr: 3000, te: 80, flipAngle: 90 },
-  "T2 AXIAL": { tr: 5000, te: 100, flipAngle: 90, sliceThickness: 5, sliceGap: 1, sliceCount: 30, fovRead: 230, fovPhase: 230 },
-};
-
-const defaultParams: ScanParams = {
-  fovRead: 230,
-  fovPhase: 230,
-  sliceThickness: 5,
-  sliceGap: 1,
-  sliceCount: 30,
-  angulation: 0,
-  tr: 400,
-  te: 5,
-  flipAngle: 90,
-};
 const Index = () => {
   const [params, setParams] = useState<ScanParams>(defaultParams);
   const [planning, setPlanning] = useState<PlanningState>({ centerX: 0.5, centerY: 0.5 });

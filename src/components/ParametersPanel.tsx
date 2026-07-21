@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Slider } from "@/components/ui/slider";
 
-import type { ScanParams } from "@/pages/Index";
+import type { ScanParams } from "@/features/planning/domain/planning.types";
 
 interface ParamConfig {
   key: keyof ScanParams;

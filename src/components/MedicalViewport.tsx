@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import mriSagittal from "@/assets/mri-sagittal.jpg";
 import mriCoronal from "@/assets/mri-coronal.jpg";
 import mriAxial from "@/assets/mri-axial.jpg";
-import type { ScanParams, PlanningState } from "@/pages/Index";
+import type { ScanParams, PlanningState } from "@/features/planning/domain/planning.types";
 
 const images = {
   sagittal: mriSagittal,
