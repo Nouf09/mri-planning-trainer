@@ -65,6 +65,7 @@ const Index = () => {
           autoAdjustSliceCount={autoAdjustSliceCount}
           onToggleAutoAdjust={toggleAutoAdjustSliceCount}
           selectedProtocol={selectedProtocol}
+          selectedCaseId={selectedCaseId}
         />
       </div>
 

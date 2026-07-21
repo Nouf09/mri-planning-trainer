@@ -4,7 +4,8 @@ export function evaluatePlanningGuidance(
   coverage: number,
   sliceThickness: number,
   angulation: number,
-  selectedProtocol?: string
+  selectedProtocol?: string,
+  selectedCaseId?: string | null
 ): GuidanceResult {
   const items: GuidanceItem[] = [];
 
@@ -37,10 +38,15 @@ export function evaluatePlanningGuidance(
     ms: ["T2 FLAIR", "T2 AXIAL", "T1 MPRAGE"],
   };
   const proto = selectedProtocol ?? "";
-  const matchedAny = Object.values(protocolMap).some((seqs) =>
-    seqs.some((s) => s.toLowerCase() === proto.toLowerCase())
-  );
-  if (matchedAny) {
+  let protocolGood: boolean;
+  if (selectedCaseId == null) {
+    protocolGood = true;
+  } else if (protocolMap[selectedCaseId]) {
+    protocolGood = protocolMap[selectedCaseId].some((s) => s.toLowerCase() === proto.toLowerCase());
+  } else {
+    protocolGood = false;
+  }
+  if (protocolGood) {
     items.push({ label: "Protocol", status: "good", text: "Appropriate" });
   } else {
     items.push({ label: "Protocol", status: "warn", text: "Review selection" });

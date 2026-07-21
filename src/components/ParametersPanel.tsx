@@ -30,9 +30,10 @@ interface ParametersPanelProps {
   autoAdjustSliceCount?: boolean;
   onToggleAutoAdjust?: () => void;
   selectedProtocol?: string;
+  selectedCaseId: string | null;
 }
 
-export function ParametersPanel({ params, onParamChange, autoAdjustSliceCount, onToggleAutoAdjust, selectedProtocol }: ParametersPanelProps) {
+export function ParametersPanel({ params, onParamChange, autoAdjustSliceCount, onToggleAutoAdjust, selectedProtocol, selectedCaseId }: ParametersPanelProps) {
   const coverage = useMemo(
     () => calculateCoverage(params.sliceCount, params.sliceThickness, params.sliceGap),
     [params.sliceCount, params.sliceThickness, params.sliceGap]
@@ -44,8 +45,8 @@ export function ParametersPanel({ params, onParamChange, autoAdjustSliceCount, o
   );
 
   const guidance = useMemo(
-    () => evaluatePlanningGuidance(coverage, params.sliceThickness, params.angulation, selectedProtocol),
-    [coverage, params.sliceThickness, params.angulation, selectedProtocol]
+    () => evaluatePlanningGuidance(coverage, params.sliceThickness, params.angulation, selectedProtocol, selectedCaseId),
+    [coverage, params.sliceThickness, params.angulation, selectedProtocol, selectedCaseId]
   );
 
   return (
