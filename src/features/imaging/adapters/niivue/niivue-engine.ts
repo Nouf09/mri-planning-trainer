@@ -1,6 +1,10 @@
 import type { AnatomicalPlane } from "@/features/imaging/domain/viewport.types";
 import type { VolumeSource } from "@/features/imaging/domain/volume.types";
 import type { VolumeImagingEngine } from "@/features/imaging/domain/volume-imaging-engine";
+import {
+  arePositionsEqual,
+  type VolumePosition,
+} from "@/features/imaging/domain/volume-position";
 
 /**
  * Minimal surface this adapter uses. Declared locally so Niivue types never
@@ -11,6 +15,22 @@ interface NiivueLike {
   loadVolumes(volumes: { url: string }[]): Promise<unknown>;
   setSliceType(sliceType: number): void;
   cleanup(): void;
+  drawScene(): void;
+  mm2frac(mm: [number, number, number]): ArrayLike<number>;
+  frac2mm(frac: [number, number, number]): ArrayLike<number>;
+  scene: { crosshairPos: ArrayLike<number> };
+  onLocationChange: (location: unknown) => void;
+}
+
+/** The subset of Niivue's location payload this adapter consumes. */
+interface NiivueLocationLike {
+  mm?: ArrayLike<number>;
+}
+
+const VOLUME_CENTER_FRAC: [number, number, number] = [0.5, 0.5, 0.5];
+
+function toPosition(mm: ArrayLike<number>): VolumePosition {
+  return { x: mm[0], y: mm[1], z: mm[2] };
 }
 
 /**
@@ -28,6 +48,26 @@ export function createNiivueEngine(): VolumeImagingEngine {
   let instance: NiivueLike | null = null;
   let attachedCanvas: HTMLCanvasElement | null = null;
   let generation = 0;
+
+  // Echo guards. `applying` blocks synchronous re-entry while a position is
+  // being written; `lastKnown` additionally rejects asynchronous echoes, which
+  // the flag alone cannot catch. Together they enforce the invariant that only
+  // user-driven interaction ever reaches the listener.
+  let applying = false;
+  let lastKnown: VolumePosition | null = null;
+  let positionListener: ((position: VolumePosition) => void) | null = null;
+
+  const handleLocationChange = (location: unknown): void => {
+    if (applying) return;
+    const mm = (location as NiivueLocationLike | null)?.mm;
+    if (!mm || mm.length < 3) return;
+
+    const next = toPosition(mm);
+    if (lastKnown && arePositionsEqual(lastKnown, next)) return;
+
+    lastKnown = next;
+    positionListener?.(next);
+  };
 
   const releaseContext = (canvas: HTMLCanvasElement | null) => {
     if (!canvas) return;
@@ -71,6 +111,7 @@ export function createNiivueEngine(): VolumeImagingEngine {
         sagittal: SLICE_TYPE.SAGITTAL,
       };
       created.setSliceType(sliceTypeByPlane[plane]);
+      created.onLocationChange = handleLocationChange;
 
       instance = created;
       attachedCanvas = canvas;
@@ -84,11 +125,44 @@ export function createNiivueEngine(): VolumeImagingEngine {
       if (loadGeneration !== generation) return;
     },
 
+    setPosition(position: VolumePosition): void {
+      if (!instance) return;
+      // Nothing to do, and re-writing would risk an echo.
+      if (lastKnown && arePositionsEqual(lastKnown, position)) return;
+
+      applying = true;
+      try {
+        const frac = instance.mm2frac([position.x, position.y, position.z]);
+        instance.scene.crosshairPos = frac;
+        instance.drawScene();
+        lastKnown = { ...position };
+      } finally {
+        applying = false;
+      }
+    },
+
+    setPositionListener(listener: ((position: VolumePosition) => void) | null): void {
+      positionListener = listener;
+    },
+
+    getPosition(): VolumePosition | null {
+      if (!instance) return null;
+      const frac = instance.scene.crosshairPos;
+      if (!frac || frac.length < 3) return null;
+      return toPosition(instance.frac2mm([frac[0], frac[1], frac[2]]));
+    },
+
+    getCenterPosition(): VolumePosition | null {
+      if (!instance) return null;
+      return toPosition(instance.frac2mm(VOLUME_CENTER_FRAC));
+    },
+
     dispose(): void {
       generation++;
       const canvas = attachedCanvas;
       if (instance) {
         try {
+          instance.onLocationChange = () => undefined;
           instance.cleanup();
         } catch {
           // Teardown must not throw during unmount.
@@ -96,6 +170,9 @@ export function createNiivueEngine(): VolumeImagingEngine {
       }
       instance = null;
       attachedCanvas = null;
+      positionListener = null;
+      lastKnown = null;
+      applying = false;
       releaseContext(canvas);
     },
   };

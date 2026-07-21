@@ -4,7 +4,9 @@ import type { AnatomicalPlane } from "@/features/imaging/domain/viewport.types";
 import type { PlanningGeometry } from "@/features/imaging/domain/overlay.types";
 import { useImagingEngine } from "@/features/imaging/hooks/use-imaging-engine";
 import { useVolumeEngine } from "@/features/imaging/hooks/use-volume-engine";
+import { useVolumeSync } from "@/features/imaging/hooks/use-volume-sync";
 import { DEFAULT_VOLUME_SOURCE } from "@/features/imaging/data/volume-source";
+import type { VolumePosition } from "@/features/imaging/domain/volume-position";
 
 const planeLabelStyles: Record<AnatomicalPlane, string> = {
   sagittal: "text-console-warn",
@@ -19,11 +21,13 @@ interface ViewportProps {
   planning: PlanningState;
   onPlanningChange: (s: Partial<PlanningState>) => void;
   onParamChange: (key: keyof ScanParams, value: number) => void;
+  volumePosition: VolumePosition | null;
+  onVolumePositionChange: (position: VolumePosition) => void;
 }
 
 type DragMode = "move" | "resize" | "rotate" | null;
 
-export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange }: ViewportProps) {
+export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange }: ViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
@@ -43,6 +47,12 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
 
   const backgroundSource = engine.getBackgroundSource(plane);
   const volume = useVolumeEngine(engine, plane, DEFAULT_VOLUME_SOURCE);
+  useVolumeSync({
+    engine,
+    status: volume.status,
+    position: volumePosition,
+    onPositionChange: onVolumePositionChange,
+  });
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;

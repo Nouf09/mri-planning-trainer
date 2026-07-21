@@ -4,6 +4,7 @@ import { ParametersPanel } from "@/components/ParametersPanel";
 import { ClinicalCasePanel } from "@/components/ClinicalCasePanel";
 import { Activity } from "lucide-react";
 import { usePlanningSession } from "@/features/planning/hooks/use-planning-session";
+import { useVolumePosition } from "@/features/imaging/hooks/use-volume-position";
 
 const Index = () => {
   const {
@@ -18,6 +19,8 @@ const Index = () => {
     toggleAutoAdjustSliceCount,
     selectCase,
   } = usePlanningSession();
+
+  const { position: volumePosition, publishPosition } = useVolumePosition();
 
   return (
     <div className="h-screen flex flex-col bg-console-dark overflow-hidden">
@@ -56,6 +59,8 @@ const Index = () => {
               planning={planning}
               onPlanningChange={updatePlanning}
               onParamChange={updateParam}
+              volumePosition={volumePosition}
+              onVolumePositionChange={publishPosition}
             />
           ))}
         </main>
