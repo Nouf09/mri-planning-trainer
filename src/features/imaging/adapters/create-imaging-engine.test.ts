@@ -1,9 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { createImagingEngine } from "@/features/imaging/adapters/create-imaging-engine";
 import type { ImagingEngineKind } from "@/features/imaging/domain/imaging-engine";
 import type { AnatomicalPlane } from "@/features/imaging/domain/viewport.types";
 
 const planes: AnatomicalPlane[] = ["sagittal", "coronal", "axial"];
+
+const withWebGL2 = (supported: boolean) =>
+  vi
+    .spyOn(HTMLCanvasElement.prototype, "getContext")
+    .mockReturnValue(supported ? ({} as unknown as RenderingContext) : null);
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("createImagingEngine", () => {
   it("builds the legacy JPG engine for the 'jpg' kind", () => {
@@ -33,7 +42,13 @@ describe("createImagingEngine", () => {
 });
 
 describe("createImagingEngine fallback", () => {
-  it("falls back to the JPG engine for the not-yet-implemented 'niivue' kind", () => {
+  it("builds the niivue engine when WebGL2 is available", () => {
+    withWebGL2(true);
+    expect(createImagingEngine("niivue").kind).toBe("niivue");
+  });
+
+  it("falls back to the JPG engine when WebGL2 is unavailable", () => {
+    withWebGL2(false);
     const engine = createImagingEngine("niivue");
     expect(engine).toBeDefined();
     expect(engine.kind).toBe("jpg");
@@ -45,7 +60,16 @@ describe("createImagingEngine fallback", () => {
   });
 
   it("still renders backgrounds when falling back", () => {
+    withWebGL2(false);
     const engine = createImagingEngine("niivue");
     expect(engine.getBackgroundSource("axial")).toBeTruthy();
+  });
+
+  it("is deterministic for the default engine regardless of WebGL2", () => {
+    withWebGL2(false);
+    expect(createImagingEngine("jpg").kind).toBe("jpg");
+    vi.restoreAllMocks();
+    withWebGL2(true);
+    expect(createImagingEngine("jpg").kind).toBe("jpg");
   });
 });

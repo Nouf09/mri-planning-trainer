@@ -3,6 +3,8 @@ import type { ScanParams, PlanningState } from "@/features/planning/domain/plann
 import type { AnatomicalPlane } from "@/features/imaging/domain/viewport.types";
 import type { PlanningGeometry } from "@/features/imaging/domain/overlay.types";
 import { useImagingEngine } from "@/features/imaging/hooks/use-imaging-engine";
+import { useVolumeEngine } from "@/features/imaging/hooks/use-volume-engine";
+import { DEFAULT_VOLUME_SOURCE } from "@/features/imaging/data/volume-source";
 
 const planeLabelStyles: Record<AnatomicalPlane, string> = {
   sagittal: "text-console-warn",
@@ -40,6 +42,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   };
 
   const backgroundSource = engine.getBackgroundSource(plane);
+  const volume = useVolumeEngine(engine, plane, DEFAULT_VOLUME_SOURCE);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -140,6 +143,17 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
 
       <div className="flex-1 relative min-h-0" ref={containerRef}>
         {backgroundSource && <img src={backgroundSource} alt={`${label} MRI view`} className="absolute inset-0 w-full h-full object-cover opacity-90" />}
+        {volume.isVolume && <canvas ref={volume.canvasRef} className="absolute inset-0 w-full h-full" />}
+        {volume.status === "loading" && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[9px] font-mono text-muted-foreground">
+            LOADING VOLUME
+          </div>
+        )}
+        {volume.status === "error" && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-[9px] font-mono text-console-warn">
+            VOLUME UNAVAILABLE
+          </div>
+        )}
         <div className="scanline absolute inset-0 pointer-events-none" />
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} />
       </div>
