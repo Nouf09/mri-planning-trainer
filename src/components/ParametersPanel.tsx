@@ -2,6 +2,9 @@ import { useMemo } from "react";
 import { Slider } from "@/components/ui/slider";
 
 import type { ScanParams } from "@/features/planning/domain/planning.types";
+import { calculateCoverage } from "@/features/guidance/domain/coverage";
+import { evaluatePlanningFeedback } from "@/features/guidance/domain/planning-feedback";
+import { evaluatePlanningGuidance } from "@/features/guidance/domain/planning-guidance";
 
 interface ParamConfig {
   key: keyof ScanParams;
@@ -31,85 +34,19 @@ interface ParametersPanelProps {
 
 export function ParametersPanel({ params, onParamChange, autoAdjustSliceCount, onToggleAutoAdjust, selectedProtocol }: ParametersPanelProps) {
   const coverage = useMemo(
-    () => params.sliceCount * params.sliceThickness + (params.sliceCount - 1) * params.sliceGap,
+    () => calculateCoverage(params),
     [params.sliceCount, params.sliceThickness, params.sliceGap]
   );
 
-  const feedback = useMemo(() => {
-    const items: { msg: string; status: "success" | "warn" }[] = [];
+  const feedback = useMemo(
+    () => evaluatePlanningFeedback(params, coverage),
+    [coverage, params.sliceThickness, params.sliceGap, params.angulation, params.fovRead]
+  );
 
-    // Coverage
-    if (coverage < 140) items.push({ msg: "Coverage may be insufficient for full brain.", status: "warn" });
-    else if (coverage <= 180) items.push({ msg: "Coverage appropriate for brain.", status: "success" });
-
-    // Slice Thickness
-    if (params.sliceThickness > 6) items.push({ msg: "Slice thickness may be too large for brain MRI.", status: "warn" });
-    else if (params.sliceThickness >= 3 && params.sliceThickness <= 5) items.push({ msg: "Good slice thickness for brain imaging.", status: "success" });
-
-    // Slice Gap
-    if (params.sliceGap > 2) items.push({ msg: "Slice gap may reduce anatomical continuity.", status: "warn" });
-    else if (params.sliceGap >= 0 && params.sliceGap <= 1) items.push({ msg: "Optimal slice gap.", status: "success" });
-
-    // Angulation
-    if (Math.abs(params.angulation) > 25) items.push({ msg: "High angulation may distort brain symmetry.", status: "warn" });
-
-    // FOV
-    if (params.fovRead < 180) items.push({ msg: "FOV may be too small.", status: "warn" });
-
-    return items;
-  }, [coverage, params.sliceThickness, params.sliceGap, params.angulation, params.fovRead]);
-
-  const guidance = useMemo(() => {
-    const items: { label: string; status: "good" | "warn"; text: string }[] = [];
-
-    // Coverage
-    if (coverage >= 150 && coverage <= 180) {
-      items.push({ label: "Coverage", status: "good", text: "Appropriate" });
-    } else if (coverage < 130) {
-      items.push({ label: "Coverage", status: "warn", text: "May be insufficient" });
-    } else if (coverage > 200) {
-      items.push({ label: "Coverage", status: "warn", text: "May be excessive" });
-    } else {
-      items.push({ label: "Coverage", status: "good", text: "Acceptable" });
-    }
-
-    // Slice Thickness
-    if (params.sliceThickness >= 3 && params.sliceThickness <= 5) {
-      items.push({ label: "Slice thickness", status: "good", text: "Appropriate" });
-    } else if (params.sliceThickness >= 6 && params.sliceThickness <= 7) {
-      items.push({ label: "Slice thickness", status: "warn", text: "Consider reducing" });
-    } else if (params.sliceThickness > 7) {
-      items.push({ label: "Slice thickness", status: "warn", text: "May be too large" });
-    } else {
-      items.push({ label: "Slice thickness", status: "good", text: "Acceptable" });
-    }
-
-    // Protocol match
-    const protocolMap: Record<string, string[]> = {
-      stroke: ["DWI", "T2 FLAIR", "T2 AXIAL"],
-      tumor: ["T1 MPRAGE", "T2 FLAIR"],
-      ms: ["T2 FLAIR", "T2 AXIAL", "T1 MPRAGE"],
-    };
-    const proto = selectedProtocol ?? "";
-    const matchedAny = Object.values(protocolMap).some((seqs) =>
-      seqs.some((s) => s.toLowerCase() === proto.toLowerCase())
-    );
-    if (matchedAny) {
-      items.push({ label: "Protocol", status: "good", text: "Appropriate" });
-    } else {
-      items.push({ label: "Protocol", status: "warn", text: "Review selection" });
-    }
-
-    // Angulation
-    if (Math.abs(params.angulation) <= 10) {
-      items.push({ label: "Angulation", status: "good", text: "Good alignment" });
-    } else {
-      items.push({ label: "Angulation", status: "warn", text: "Review alignment" });
-    }
-
-    const allGood = items.every((i) => i.status === "good");
-    return { items, allGood };
-  }, [coverage, params.sliceThickness, params.angulation, selectedProtocol]);
+  const guidance = useMemo(
+    () => evaluatePlanningGuidance(params, coverage, selectedProtocol),
+    [coverage, params.sliceThickness, params.angulation, selectedProtocol]
+  );
 
   return (
     <aside className="w-64 flex-shrink-0 border-l border-border bg-console-panel flex flex-col">
