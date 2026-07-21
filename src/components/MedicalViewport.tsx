@@ -1,24 +1,18 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import mriSagittal from "@/assets/mri-sagittal.jpg";
-import mriCoronal from "@/assets/mri-coronal.jpg";
-import mriAxial from "@/assets/mri-axial.jpg";
 import type { ScanParams, PlanningState } from "@/features/planning/domain/planning.types";
+import type { AnatomicalPlane } from "@/features/imaging/domain/viewport.types";
+import type { PlanningGeometry } from "@/features/imaging/domain/overlay.types";
+import { useImagingEngine } from "@/features/imaging/hooks/use-imaging-engine";
 
-const images = {
-  sagittal: mriSagittal,
-  coronal: mriCoronal,
-  axial: mriAxial,
-};
-
-const planeStyles = {
-  sagittal: { label: "text-console-warn", line: "rgba(200,170,50,0.7)", fov: "rgba(200,170,50,0.35)", crossOther: ["rgba(80,180,100,0.4)", "rgba(40,200,200,0.4)"] },
-  coronal: { label: "text-console-success", line: "rgba(80,180,100,0.7)", fov: "rgba(80,180,100,0.35)", crossOther: ["rgba(200,170,50,0.4)", "rgba(40,200,200,0.4)"] },
-  axial: { label: "text-primary", line: "rgba(40,200,200,0.7)", fov: "rgba(40,200,200,0.35)", crossOther: ["rgba(200,170,50,0.4)", "rgba(80,180,100,0.4)"] },
+const planeLabelStyles: Record<AnatomicalPlane, string> = {
+  sagittal: "text-console-warn",
+  coronal: "text-console-success",
+  axial: "text-primary",
 };
 
 interface ViewportProps {
   label: string;
-  plane: "sagittal" | "coronal" | "axial";
+  plane: AnatomicalPlane;
   params: ScanParams;
   planning: PlanningState;
   onPlanningChange: (s: Partial<PlanningState>) => void;
@@ -32,6 +26,20 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
   const dragStart = useRef({ x: 0, y: 0, cx: 0, cy: 0, fovR: 0, fovP: 0, ang: 0 });
+  const { engine, overlay } = useImagingEngine();
+
+  const geometry: PlanningGeometry = {
+    centerX: planning.centerX,
+    centerY: planning.centerY,
+    fovRead: params.fovRead,
+    fovPhase: params.fovPhase,
+    angulation: params.angulation,
+    sliceCount: params.sliceCount,
+    sliceThickness: params.sliceThickness,
+    sliceGap: params.sliceGap,
+  };
+
+  const backgroundSource = engine.getBackgroundSource(plane);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -46,101 +54,18 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, w, h);
 
-    const cx = planning.centerX * w;
-    const cy = planning.centerY * h;
-    const maxFov = 500;
-    const fovW = (params.fovRead / maxFov) * w * 0.8;
-    const fovH = (params.fovPhase / maxFov) * h * 0.8;
-    const angle = (params.angulation * Math.PI) / 180;
-    const s = planeStyles[plane];
-
-    // Full-viewport crosshair lines (linked cross-reference)
-    s.crossOther.forEach((color, i) => {
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 6]);
-      if (i === 0) {
-        // horizontal
-        ctx.beginPath();
-        ctx.moveTo(0, cy);
-        ctx.lineTo(w, cy);
-        ctx.stroke();
-      } else {
-        // vertical
-        ctx.beginPath();
-        ctx.moveTo(cx, 0);
-        ctx.lineTo(cx, h);
-        ctx.stroke();
-      }
-      ctx.restore();
+    overlay.render(ctx, { width: w, height: h }, plane, {
+      centerX: planning.centerX,
+      centerY: planning.centerY,
+      fovRead: params.fovRead,
+      fovPhase: params.fovPhase,
+      angulation: params.angulation,
+      sliceCount: params.sliceCount,
+      sliceThickness: params.sliceThickness,
+      sliceGap: params.sliceGap,
     });
-
-    // Planning overlay (rotated)
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(angle);
-
-    // FOV rect
-    ctx.strokeStyle = s.fov;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 4]);
-    ctx.strokeRect(-fovW / 2, -fovH / 2, fovW, fovH);
-    ctx.setLineDash([]);
-
-    // Slice lines
-    const totalSliceSpan = params.sliceCount * (params.sliceThickness + params.sliceGap);
-    const scale = fovH / maxFov;
-    const totalPx = totalSliceSpan * scale * 2;
-    const sliceStep = totalPx / Math.max(params.sliceCount, 1);
-    const startY = -(totalPx / 2) + sliceStep / 2;
-
-    ctx.strokeStyle = s.line;
-    ctx.lineWidth = 1;
-    for (let i = 0; i < params.sliceCount; i++) {
-      const y = startY + i * sliceStep;
-      ctx.globalAlpha = 0.6;
-      ctx.beginPath();
-      ctx.moveTo(-fovW / 2, y);
-      ctx.lineTo(fovW / 2, y);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
-    // Center dot
-    ctx.fillStyle = s.line;
-    ctx.beginPath();
-    ctx.arc(0, 0, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Corner handles
-    const corners = [
-      [-fovW / 2, -fovH / 2],
-      [fovW / 2, -fovH / 2],
-      [fovW / 2, fovH / 2],
-      [-fovW / 2, fovH / 2],
-    ];
-    corners.forEach(([hx, hy]) => {
-      ctx.beginPath();
-      ctx.arc(hx, hy, 4, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    // Rotate handle
-    ctx.beginPath();
-    ctx.moveTo(0, -fovH / 2);
-    ctx.lineTo(0, -fovH / 2 - 20);
-    ctx.strokeStyle = s.line;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, -fovH / 2 - 20, 5, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-  }, [params, planning, plane]);
+  }, [params, planning, plane, overlay]);
 
   useEffect(() => {
     draw();
@@ -157,32 +82,8 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   const hitTest = (e: React.MouseEvent): DragMode => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
-    const w = canvas.width;
-    const h = canvas.height;
     const pos = getCanvasPos(e);
-    const cx = planning.centerX * w;
-    const cy = planning.centerY * h;
-    const maxFov = 500;
-    const fovW = (params.fovRead / maxFov) * w * 0.8;
-    const fovH = (params.fovPhase / maxFov) * h * 0.8;
-    const angle = (params.angulation * Math.PI) / 180;
-
-    const dx = pos.x - cx;
-    const dy = pos.y - cy;
-    const cos = Math.cos(-angle);
-    const sin = Math.sin(-angle);
-    const lx = dx * cos - dy * sin;
-    const ly = dx * sin + dy * cos;
-
-    if (Math.hypot(lx, ly - (-fovH / 2 - 20)) < 12) return "rotate";
-
-    const corners = [[-fovW / 2, -fovH / 2], [fovW / 2, -fovH / 2], [fovW / 2, fovH / 2], [-fovW / 2, fovH / 2]];
-    for (const [hx, hy] of corners) {
-      if (Math.hypot(lx - hx, ly - hy) < 12) return "resize";
-    }
-
-    if (Math.abs(lx) < fovW / 2 && Math.abs(ly) < fovH / 2) return "move";
-    return null;
+    return overlay.hitTest(pos, { width: canvas.width, height: canvas.height }, plane, geometry);
   };
 
   const onMouseDown = (e: React.MouseEvent) => {
@@ -230,7 +131,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   return (
     <div className="viewport-border rounded-sm bg-console-dark relative overflow-hidden flex flex-col">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50">
-        <span className={`font-mono text-[10px] font-semibold uppercase tracking-widest ${planeStyles[plane].label}`}>{label}</span>
+        <span className={`font-mono text-[10px] font-semibold uppercase tracking-widest ${planeLabelStyles[plane]}`}>{label}</span>
         <div className="flex gap-2 text-[9px] font-mono text-muted-foreground">
           <span>W: 1400</span>
           <span>L: 700</span>
@@ -238,7 +139,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
       </div>
 
       <div className="flex-1 relative min-h-0" ref={containerRef}>
-        <img src={images[plane]} alt={`${label} MRI view`} className="absolute inset-0 w-full h-full object-cover opacity-90" />
+        {backgroundSource && <img src={backgroundSource} alt={`${label} MRI view`} className="absolute inset-0 w-full h-full object-cover opacity-90" />}
         <div className="scanline absolute inset-0 pointer-events-none" />
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp} />
       </div>
