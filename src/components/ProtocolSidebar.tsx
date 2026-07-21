@@ -8,50 +8,18 @@ import {
   Activity,
   ChevronDown,
   ChevronRight,
+  type LucideIcon,
 } from "lucide-react";
+import { protocolGroups } from "@/features/protocols/data/protocol-catalog";
+import type { ProtocolIconKey } from "@/features/protocols/domain/protocol.types";
 
-interface Protocol {
-  name: string;
-  icon: React.ReactNode;
-  isPlaceholder?: boolean;
-  helperText?: string;
-}
-
-interface ProtocolGroup {
-  label: string;
-  protocols: Protocol[];
-}
-
-const protocolGroups: ProtocolGroup[] = [
-  {
-    label: "Brain",
-    protocols: [
-      { name: "Localizer (3-plane)", icon: <Scan className="h-3.5 w-3.5" />, isPlaceholder: true, helperText: "Three-plane localizer should be acquired before planning diagnostic sequences." },
-      { name: "T2 AXIAL", icon: <Brain className="h-3.5 w-3.5" /> },
-      { name: "T2 FLAIR", icon: <Brain className="h-3.5 w-3.5" /> },
-      { name: "DWI", icon: <Zap className="h-3.5 w-3.5" />, helperText: "ADC map generated automatically" },
-      { name: "T1 MPRAGE", icon: <Brain className="h-3.5 w-3.5" /> },
-      { name: "T2* GRE", icon: <Activity className="h-3.5 w-3.5" /> },
-      { name: "MRA TOF", icon: <Scan className="h-3.5 w-3.5" /> },
-    ],
-  },
-  {
-    label: "Spine",
-    protocols: [
-      { name: "T1 Sagittal", icon: <FileText className="h-3.5 w-3.5" /> },
-      { name: "T2 Sagittal", icon: <FileText className="h-3.5 w-3.5" /> },
-      { name: "STIR", icon: <Zap className="h-3.5 w-3.5" /> },
-    ],
-  },
-  {
-    label: "MSK",
-    protocols: [
-      { name: "PD FS", icon: <Scan className="h-3.5 w-3.5" /> },
-      { name: "T1 Coronal", icon: <FileText className="h-3.5 w-3.5" /> },
-      { name: "T2 Axial", icon: <FileText className="h-3.5 w-3.5" /> },
-    ],
-  },
-];
+const protocolIconMap: Record<ProtocolIconKey, LucideIcon> = {
+  brain: Brain,
+  scan: Scan,
+  "file-text": FileText,
+  zap: Zap,
+  activity: Activity,
+};
 
 interface ProtocolSidebarProps {
   selected: string;
@@ -94,11 +62,12 @@ export function ProtocolSidebar({ selected, onSelect }: ProtocolSidebarProps) {
 
             {expanded[group.label] && (
               <div className="space-y-0.5 px-2">
-                {group.protocols.map((proto) =>
-                  proto.isPlaceholder ? (
+                {group.protocols.map((proto) => {
+                  const Icon = protocolIconMap[proto.iconKey];
+                  return proto.isPlaceholder ? (
                     <div key={proto.name} className="px-3 py-1.5">
                       <div className="flex items-center gap-2.5 text-xs font-mono text-muted-foreground/60">
-                        {proto.icon}
+                        <Icon className="h-3.5 w-3.5" />
                         <span className="italic">{proto.name}</span>
                       </div>
                       {proto.helperText && (
@@ -119,7 +88,7 @@ export function ProtocolSidebar({ selected, onSelect }: ProtocolSidebarProps) {
                       )}
                     >
                       <div className="flex items-center gap-2.5">
-                        {proto.icon}
+                        <Icon className="h-3.5 w-3.5" />
                         {proto.name}
                       </div>
                       {proto.helperText && (
@@ -128,8 +97,8 @@ export function ProtocolSidebar({ selected, onSelect }: ProtocolSidebarProps) {
                         </p>
                       )}
                     </button>
-                  )
-                )}
+                  );
+                })}
               </div>
             )}
           </div>
