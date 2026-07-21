@@ -5,6 +5,7 @@ import type { PlanningGeometry } from "@/features/imaging/domain/overlay.types";
 import { useImagingEngine } from "@/features/imaging/hooks/use-imaging-engine";
 import { useVolumeEngine } from "@/features/imaging/hooks/use-volume-engine";
 import { useVolumeSync } from "@/features/imaging/hooks/use-volume-sync";
+import { useSliceNavigation } from "@/features/imaging/hooks/use-slice-navigation";
 import { DEFAULT_VOLUME_SOURCE } from "@/features/imaging/data/volume-source";
 import type { VolumePosition } from "@/features/imaging/domain/volume-position";
 
@@ -53,6 +54,8 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
     position: volumePosition,
     onPositionChange: onVolumePositionChange,
   });
+  // The overlay canvas owns pointer input, so it forwards wheel navigation.
+  useSliceNavigation({ engine, status: volume.status, plane, targetRef: canvasRef });
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;

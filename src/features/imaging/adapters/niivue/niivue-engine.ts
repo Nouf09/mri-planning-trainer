@@ -5,6 +5,7 @@ import {
   arePositionsEqual,
   type VolumePosition,
 } from "@/features/imaging/domain/volume-position";
+import { voxelDeltaForPlane } from "@/features/imaging/domain/slice-navigation";
 
 /**
  * Minimal surface this adapter uses. Declared locally so Niivue types never
@@ -16,6 +17,7 @@ interface NiivueLike {
   setSliceType(sliceType: number): void;
   cleanup(): void;
   drawScene(): void;
+  moveCrosshairInVox(x: number, y: number, z: number): void;
   mm2frac(mm: [number, number, number]): ArrayLike<number>;
   frac2mm(frac: [number, number, number]): ArrayLike<number>;
   scene: { crosshairPos: ArrayLike<number> };
@@ -155,6 +157,15 @@ export function createNiivueEngine(): VolumeImagingEngine {
     getCenterPosition(): VolumePosition | null {
       if (!instance) return null;
       return toPosition(instance.frac2mm(VOLUME_CENTER_FRAC));
+    },
+
+    stepSlice(plane: AnatomicalPlane, steps: number): void {
+      if (!instance || steps === 0) return;
+      const [x, y, z] = voxelDeltaForPlane(plane, steps);
+      // Niivue clamps to the volume bounds and reports the move through
+      // onLocationChange, so this travels the same path as any other
+      // user-driven interaction.
+      instance.moveCrosshairInVox(x, y, z);
     },
 
     dispose(): void {

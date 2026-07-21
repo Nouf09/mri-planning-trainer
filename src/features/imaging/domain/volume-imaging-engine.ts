@@ -25,6 +25,14 @@ export interface VolumeImagingEngine extends ImagingEngine {
   getPosition(): VolumePosition | null;
   /** Centre of the loaded volume, or null before a volume is loaded. */
   getCenterPosition(): VolumePosition | null;
+  /**
+   * Step through slices of the given plane. Positive steps advance toward
+   * higher voxel indices.
+   *
+   * This is user-driven navigation, so the resulting move is reported to the
+   * position listener like any other interaction.
+   */
+  stepSlice(plane: AnatomicalPlane, steps: number): void;
 }
 
 export function isVolumeImagingEngine(engine: ImagingEngine): engine is VolumeImagingEngine {

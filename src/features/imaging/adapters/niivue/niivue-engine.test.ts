@@ -5,6 +5,7 @@ const loadVolumes = vi.fn(async () => undefined);
 const setSliceType = vi.fn();
 const cleanup = vi.fn();
 const drawScene = vi.fn();
+const moveCrosshairInVox = vi.fn();
 
 // A deliberately simple coordinate model: mm = frac * 100. Enough to prove the
 // adapter converts in both directions without depending on real Niivue maths.
@@ -28,6 +29,7 @@ vi.mock("@niivue/niivue", () => ({
       setSliceType,
       cleanup,
       drawScene,
+      moveCrosshairInVox,
       mm2frac,
       frac2mm,
       scene: { crosshairPos: [0.5, 0.5, 0.5] },
@@ -50,6 +52,7 @@ beforeEach(() => {
   setSliceType.mockClear();
   cleanup.mockClear();
   drawScene.mockClear();
+  moveCrosshairInVox.mockClear();
   mm2frac.mockClear();
   frac2mm.mockClear();
 });
@@ -351,5 +354,70 @@ describe("niivue engine feedback-loop invariant", () => {
     instance.onLocationChange({ mm: [1, 2, 3] });
 
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe("niivue engine slice stepping", () => {
+  it("steps each plane along its own voxel axis", async () => {
+    const cases = [
+      ["sagittal", [1, 0, 0]],
+      ["coronal", [0, 1, 0]],
+      ["axial", [0, 0, 1]],
+    ] as const;
+
+    for (const [plane, expected] of cases) {
+      moveCrosshairInVox.mockClear();
+      const { engine } = await mountedEngine(plane);
+      engine.stepSlice(plane, 1);
+      expect(moveCrosshairInVox).toHaveBeenCalledWith(...expected);
+    }
+  });
+
+  it("carries the sign of the step", async () => {
+    const { engine } = await mountedEngine("axial");
+    engine.stepSlice("axial", -3);
+    expect(moveCrosshairInVox).toHaveBeenCalledWith(0, 0, -3);
+  });
+
+  it("ignores a zero step", async () => {
+    const { engine } = await mountedEngine("axial");
+    engine.stepSlice("axial", 0);
+    expect(moveCrosshairInVox).not.toHaveBeenCalled();
+  });
+
+  it("does nothing before a volume is mounted", () => {
+    const engine = createNiivueEngine();
+    engine.stepSlice("axial", 1);
+    expect(moveCrosshairInVox).not.toHaveBeenCalled();
+  });
+
+  it("reports a stepped move as user-driven navigation", async () => {
+    const { engine, instance } = await mountedEngine("axial");
+    const listener = vi.fn();
+    engine.setPositionListener(listener);
+
+    // Niivue reports the move it just made.
+    moveCrosshairInVox.mockImplementationOnce(() => {
+      instance.onLocationChange({ mm: [3, 4, 5] });
+    });
+    engine.stepSlice("axial", 1);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ x: 3, y: 4, z: 5 });
+  });
+
+  it("does not echo when the shared position returns to it", async () => {
+    const { engine, instance } = await mountedEngine("axial");
+    const listener = vi.fn();
+    engine.setPositionListener(listener);
+
+    moveCrosshairInVox.mockImplementationOnce(() => {
+      instance.onLocationChange({ mm: [3, 4, 5] });
+    });
+    engine.stepSlice("axial", 1);
+    engine.setPosition({ x: 3, y: 4, z: 5 });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(drawScene).not.toHaveBeenCalled();
   });
 });
