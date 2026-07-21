@@ -1,7 +1,11 @@
-import type { ScanParams } from "@/features/planning/domain/planning.types";
 import type { GuidanceItem, GuidanceResult } from "@/features/guidance/domain/guidance.types";
 
-export function evaluatePlanningGuidance(params: ScanParams, coverage: number, selectedProtocol?: string): GuidanceResult {
+export function evaluatePlanningGuidance(
+  coverage: number,
+  sliceThickness: number,
+  angulation: number,
+  selectedProtocol?: string
+): GuidanceResult {
   const items: GuidanceItem[] = [];
 
   // Coverage
@@ -16,11 +20,11 @@ export function evaluatePlanningGuidance(params: ScanParams, coverage: number, s
   }
 
   // Slice Thickness
-  if (params.sliceThickness >= 3 && params.sliceThickness <= 5) {
+  if (sliceThickness >= 3 && sliceThickness <= 5) {
     items.push({ label: "Slice thickness", status: "good", text: "Appropriate" });
-  } else if (params.sliceThickness >= 6 && params.sliceThickness <= 7) {
+  } else if (sliceThickness >= 6 && sliceThickness <= 7) {
     items.push({ label: "Slice thickness", status: "warn", text: "Consider reducing" });
-  } else if (params.sliceThickness > 7) {
+  } else if (sliceThickness > 7) {
     items.push({ label: "Slice thickness", status: "warn", text: "May be too large" });
   } else {
     items.push({ label: "Slice thickness", status: "good", text: "Acceptable" });
@@ -43,7 +47,7 @@ export function evaluatePlanningGuidance(params: ScanParams, coverage: number, s
   }
 
   // Angulation
-  if (Math.abs(params.angulation) <= 10) {
+  if (Math.abs(angulation) <= 10) {
     items.push({ label: "Angulation", status: "good", text: "Good alignment" });
   } else {
     items.push({ label: "Angulation", status: "warn", text: "Review alignment" });

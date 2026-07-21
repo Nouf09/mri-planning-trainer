@@ -34,17 +34,17 @@ interface ParametersPanelProps {
 
 export function ParametersPanel({ params, onParamChange, autoAdjustSliceCount, onToggleAutoAdjust, selectedProtocol }: ParametersPanelProps) {
   const coverage = useMemo(
-    () => calculateCoverage(params),
+    () => calculateCoverage(params.sliceCount, params.sliceThickness, params.sliceGap),
     [params.sliceCount, params.sliceThickness, params.sliceGap]
   );
 
   const feedback = useMemo(
-    () => evaluatePlanningFeedback(params, coverage),
+    () => evaluatePlanningFeedback(coverage, params.sliceThickness, params.sliceGap, params.angulation, params.fovRead),
     [coverage, params.sliceThickness, params.sliceGap, params.angulation, params.fovRead]
   );
 
   const guidance = useMemo(
-    () => evaluatePlanningGuidance(params, coverage, selectedProtocol),
+    () => evaluatePlanningGuidance(coverage, params.sliceThickness, params.angulation, selectedProtocol),
     [coverage, params.sliceThickness, params.angulation, selectedProtocol]
   );
 
