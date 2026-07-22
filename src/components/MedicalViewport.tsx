@@ -15,14 +15,13 @@ import {
 } from "@/features/imaging/data/imaging-config";
 import { createPrescriptionOverlayRenderer } from "@/features/imaging/overlays/prescription-overlay-renderer";
 import { useVolumeGeometry } from "@/features/imaging/hooks/use-volume-geometry";
-import {
-  boundsCenter,
-  type VolumeGeometry,
-  type WorldBounds,
-} from "@/features/imaging/domain/volume-geometry";
+import type { VolumeGeometry, WorldBounds } from "@/features/imaging/domain/volume-geometry";
 import { VIEW_ORIENTATION_BY_PLANE } from "@/features/planning/domain/orientation";
-import { projectToViewPlane, viewExtentMm } from "@/features/planning/domain/prescription-math";
 import { activeSequence, type PlanningSession } from "@/features/planning/domain/planning-session";
+import { createFittedCamera } from "@/features/imaging/projection/viewport-camera";
+import { projectPrescription } from "@/features/imaging/projection/project-prescription";
+import { hitTestProjection } from "@/features/imaging/projection/hit-test-projection";
+import type { ProjectionResult } from "@/features/imaging/projection/projection-model";
 
 const planeLabelStyles: Record<AnatomicalPlane, string> = {
   sagittal: "text-console-warn",
@@ -94,6 +93,21 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   // the slab read-only rather than exposing handles that are not drawn.
   const isPrescriptionEditable = planningMode === "legacy" || plane === "axial";
 
+  // Drawing and hit-testing share one projection, so the interactive regions
+  // are the painted ones by construction.
+  const projectFor = useCallback(
+    (width: number, height: number): ProjectionResult | null => {
+      const sequence = activeSequence(session);
+      if (!sequence || !planningBounds) return null;
+      const camera = createFittedCamera(planningBounds, VIEW_ORIENTATION_BY_PLANE[plane], {
+        width,
+        height,
+      });
+      return camera ? projectPrescription(sequence.prescription, camera) : null;
+    },
+    [session, planningBounds, plane]
+  );
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -109,18 +123,11 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
     if (!ctx) return;
 
     if (planningMode === "world") {
-      const sequence = activeSequence(session);
-      if (!sequence || !planningBounds) return;
-      const view = VIEW_ORIENTATION_BY_PLANE[plane];
-      const extent = viewExtentMm(planningBounds, view);
-      if (extent.uMm <= 0 || extent.vMm <= 0) return;
-      prescriptionOverlay.render(
-        ctx,
-        { width: w, height: h },
-        plane,
-        projectToViewPlane(sequence.prescription, view, boundsCenter(planningBounds)),
-        { pxPerMmU: w / extent.uMm, pxPerMmV: h / extent.vMm }
-      );
+      const projection = projectFor(w, h);
+      if (!projection) return;
+      prescriptionOverlay.render(ctx, { width: w, height: h }, plane, projection, {
+        showHandles: isPrescriptionEditable,
+      });
       return;
     }
 
@@ -134,7 +141,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
       sliceThickness: params.sliceThickness,
       sliceGap: params.sliceGap,
     });
-  }, [params, planning, plane, overlay, planningMode, session, planningBounds]);
+  }, [params, planning, plane, overlay, planningMode, projectFor, isPrescriptionEditable]);
 
   useEffect(() => {
     draw();
@@ -153,6 +160,12 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const pos = getCanvasPos(e);
+
+    if (planningMode === "world") {
+      const projection = projectFor(canvas.width, canvas.height);
+      return projection ? hitTestProjection(pos, projection) : null;
+    }
+
     return overlay.hitTest(pos, { width: canvas.width, height: canvas.height }, plane, geometry);
   };
 
@@ -195,7 +208,11 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
     } else if (dragMode === "rotate") {
       const cx = planning.centerX * w;
       const cy = planning.centerY * h;
-      const delta = ((Math.atan2(pos.y - cy, pos.x - cx) - Math.atan2(st.y - cy, st.x - cx)) * 180) / Math.PI;
+      const screenDelta = ((Math.atan2(pos.y - cy, pos.x - cx) - Math.atan2(st.y - cy, st.x - cx)) * 180) / Math.PI;
+      // World rendering maps the plane's phase axis upward, so a screen-space
+      // turn corresponds to the opposite change in angulation. Without this the
+      // prescription would rotate away from the pointer.
+      const delta = planningMode === "world" ? -screenDelta : screenDelta;
       onParamChange("angulation", Math.round(Math.max(-45, Math.min(45, st.ang + delta))));
     }
   };
