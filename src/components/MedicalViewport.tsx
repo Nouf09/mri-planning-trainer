@@ -13,8 +13,13 @@ import {
   resolveEffectivePlanningMode,
   resolvePlanningMode,
 } from "@/features/imaging/data/imaging-config";
-import { BRAIN_SYNTHETIC_WORLD } from "@/features/imaging/data/brain-synthetic-world";
 import { createPrescriptionOverlayRenderer } from "@/features/imaging/overlays/prescription-overlay-renderer";
+import { useVolumeGeometry } from "@/features/imaging/hooks/use-volume-geometry";
+import {
+  boundsCenter,
+  type VolumeGeometry,
+  type WorldBounds,
+} from "@/features/imaging/domain/volume-geometry";
 import { VIEW_ORIENTATION_BY_PLANE } from "@/features/planning/domain/orientation";
 import { projectToViewPlane, viewExtentMm } from "@/features/planning/domain/prescription-math";
 import { activeSequence, type PlanningSession } from "@/features/planning/domain/planning-session";
@@ -35,13 +40,16 @@ interface ViewportProps {
   volumePosition: VolumePosition | null;
   onVolumePositionChange: (position: VolumePosition) => void;
   session: PlanningSession;
+  /** Physical extent of the active image source, or null when unknown. */
+  planningBounds: WorldBounds | null;
+  onVolumeGeometryChange: (geometry: VolumeGeometry | null) => void;
 }
 
 const prescriptionOverlay = createPrescriptionOverlayRenderer();
 
 type DragMode = "move" | "resize" | "rotate" | null;
 
-export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session }: ViewportProps) {
+export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session, planningBounds, onVolumeGeometryChange }: ViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
@@ -71,7 +79,16 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   useSliceNavigation({ engine, status: volume.status, plane, targetRef: canvasRef });
   const navigateToScreenPoint = useClickNavigation({ engine, status: volume.status });
 
-  const planningMode = resolveEffectivePlanningMode(resolvePlanningMode(), engine.kind);
+  const volumeGeometry = useVolumeGeometry(engine, volume.status);
+  useEffect(() => {
+    onVolumeGeometryChange(volumeGeometry);
+  }, [volumeGeometry, onVolumeGeometryChange]);
+
+  const planningMode = resolveEffectivePlanningMode(
+    resolvePlanningMode(),
+    engine.kind,
+    planningBounds !== null
+  );
   // Legacy hit-test geometry only matches the world rendering in the planning
   // plane, so prescription editing is limited to it. Perpendicular views render
   // the slab read-only rather than exposing handles that are not drawn.
@@ -93,14 +110,15 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
 
     if (planningMode === "world") {
       const sequence = activeSequence(session);
-      if (!sequence) return;
+      if (!sequence || !planningBounds) return;
       const view = VIEW_ORIENTATION_BY_PLANE[plane];
-      const extent = viewExtentMm(BRAIN_SYNTHETIC_WORLD, view);
+      const extent = viewExtentMm(planningBounds, view);
+      if (extent.uMm <= 0 || extent.vMm <= 0) return;
       prescriptionOverlay.render(
         ctx,
         { width: w, height: h },
         plane,
-        projectToViewPlane(sequence.prescription, view, BRAIN_SYNTHETIC_WORLD.center),
+        projectToViewPlane(sequence.prescription, view, boundsCenter(planningBounds)),
         { pxPerMmU: w / extent.uMm, pxPerMmV: h / extent.vMm }
       );
       return;
@@ -116,7 +134,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
       sliceThickness: params.sliceThickness,
       sliceGap: params.sliceGap,
     });
-  }, [params, planning, plane, overlay, planningMode, session]);
+  }, [params, planning, plane, overlay, planningMode, session, planningBounds]);
 
   useEffect(() => {
     draw();

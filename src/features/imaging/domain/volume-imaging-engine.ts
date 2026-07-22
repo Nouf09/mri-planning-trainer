@@ -2,6 +2,7 @@ import type { ImagingEngine } from "@/features/imaging/domain/imaging-engine";
 import type { AnatomicalPlane } from "@/features/imaging/domain/viewport.types";
 import type { VolumeSource } from "@/features/imaging/domain/volume.types";
 import type { VolumePosition } from "@/features/imaging/domain/volume-position";
+import type { VolumeGeometry } from "@/features/imaging/domain/volume-geometry";
 
 /**
  * An engine that paints its own pixels into a canvas from a loaded volume.
@@ -44,6 +45,13 @@ export interface VolumeImagingEngine extends ImagingEngine {
    * position listener like any other interaction.
    */
   navigateToScreenPoint(clientX: number, clientY: number): void;
+  /**
+   * Physical geometry of the loaded volume, or null until it is available.
+   *
+   * Lets planning work against the real image source instead of an assumed
+   * extent, without exposing anything library-specific.
+   */
+  getVolumeGeometry(): VolumeGeometry | null;
 }
 
 export function isVolumeImagingEngine(engine: ImagingEngine): engine is VolumeImagingEngine {

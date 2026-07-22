@@ -35,9 +35,12 @@ export function resolvePlanningMode(): PlanningMode {
  */
 export function resolveEffectivePlanningMode(
   requested: PlanningMode,
-  engineKind: ImagingEngineKind
+  engineKind: ImagingEngineKind,
+  hasPlanningBounds: boolean
 ): PlanningMode {
-  return requested === "world" && engineKind === "jpg" ? "world" : DEFAULT_PLANNING_MODE;
+  if (requested !== "world") return DEFAULT_PLANNING_MODE;
+  if (!hasPlanningBounds) return DEFAULT_PLANNING_MODE;
+  return engineKind === "jpg" || engineKind === "niivue" ? "world" : DEFAULT_PLANNING_MODE;
 }
 
 export function resolveImagingEngineKind(): ImagingEngineKind {

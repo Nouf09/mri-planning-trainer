@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { BRAIN_SYNTHETIC_WORLD } from "@/features/imaging/data/brain-synthetic-world";
+import type { WorldBounds } from "@/features/imaging/domain/volume-geometry";
 import { toPlanningSession } from "@/features/planning/domain/planning-session";
 import {
   DEFAULT_SEQUENCE_ID,
@@ -10,7 +10,7 @@ import type { ScanParams, PlanningState } from "@/features/planning/domain/plann
 import { defaultParams } from "@/features/planning/state/planning.initial-state";
 import { protocolPresets } from "@/features/protocols/data/protocol-presets";
 
-export function usePlanningSession() {
+export function usePlanningSession(planningBounds: WorldBounds) {
   const [params, setParams] = useState<ScanParams>(defaultParams);
   const [planning, setPlanning] = useState<PlanningState>({ centerX: 0.5, centerY: 0.5 });
   const [autoAdjustSliceCount, setAutoAdjustSliceCount] = useState(true);
@@ -69,7 +69,7 @@ export function usePlanningSession() {
         study: EDUCATIONAL_STUDY,
         sequenceId: DEFAULT_SEQUENCE_ID,
         protocolName: selectedProtocol,
-        world: BRAIN_SYNTHETIC_WORLD,
+        bounds: planningBounds,
         centerX: planning.centerX,
         centerY: planning.centerY,
         angulation: params.angulation,
@@ -79,7 +79,7 @@ export function usePlanningSession() {
         sliceGap: params.sliceGap,
         sliceCount: params.sliceCount,
       }),
-    [planning, params, selectedProtocol]
+    [planning, params, selectedProtocol, planningBounds]
   );
 
   return {

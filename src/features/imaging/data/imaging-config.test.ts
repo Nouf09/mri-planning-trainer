@@ -48,24 +48,32 @@ describe("resolvePlanningMode", () => {
 
 describe("resolveEffectivePlanningMode", () => {
   it("enables world planning for the JPG source", () => {
-    expect(resolveEffectivePlanningMode("world", "jpg")).toBe("world");
+    expect(resolveEffectivePlanningMode("world", "jpg", true)).toBe("world");
   });
 
-  it("falls back to legacy for a real volume", () => {
-    // A synthetic descriptor must never be applied to real anatomy.
-    expect(resolveEffectivePlanningMode("world", "niivue")).toBe("legacy");
+  it("enables world planning for a volume once its geometry is known", () => {
+    expect(resolveEffectivePlanningMode("world", "niivue", true)).toBe("world");
+  });
+
+  it("falls back while a volume has no geometry yet", () => {
+    // A synthetic extent must never stand in for real anatomy.
+    expect(resolveEffectivePlanningMode("world", "niivue", false)).toBe("legacy");
+  });
+
+  it("falls back when the JPG source somehow has no bounds", () => {
+    expect(resolveEffectivePlanningMode("world", "jpg", false)).toBe("legacy");
   });
 
   it("leaves legacy requests untouched", () => {
-    expect(resolveEffectivePlanningMode("legacy", "jpg")).toBe("legacy");
-    expect(resolveEffectivePlanningMode("legacy", "niivue")).toBe("legacy");
+    expect(resolveEffectivePlanningMode("legacy", "jpg", true)).toBe("legacy");
+    expect(resolveEffectivePlanningMode("legacy", "niivue", true)).toBe("legacy");
   });
 
   it("falls back for any unknown engine", () => {
-    expect(resolveEffectivePlanningMode("world", "bogus" as never)).toBe("legacy");
+    expect(resolveEffectivePlanningMode("world", "bogus" as never, true)).toBe("legacy");
   });
 
   it("never returns world for an unknown requested mode", () => {
-    expect(resolveEffectivePlanningMode("bogus" as PlanningMode, "jpg")).toBe("legacy");
+    expect(resolveEffectivePlanningMode("bogus" as PlanningMode, "jpg", true)).toBe("legacy");
   });
 });

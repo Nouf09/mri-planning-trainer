@@ -3,10 +3,28 @@ import { MedicalViewport } from "@/components/MedicalViewport";
 import { ParametersPanel } from "@/components/ParametersPanel";
 import { ClinicalCasePanel } from "@/components/ClinicalCasePanel";
 import { Activity } from "lucide-react";
+import { useMemo, useState } from "react";
 import { usePlanningSession } from "@/features/planning/hooks/use-planning-session";
 import { useVolumePosition } from "@/features/imaging/hooks/use-volume-position";
+import { resolveImagingEngineKind } from "@/features/imaging/data/imaging-config";
+import { BRAIN_SYNTHETIC_WORLD } from "@/features/imaging/data/brain-synthetic-world";
+import {
+  boundsFromDescriptor,
+  resolvePlanningBounds,
+  type VolumeGeometry,
+} from "@/features/imaging/domain/volume-geometry";
+
+const SYNTHETIC_BRAIN_BOUNDS = boundsFromDescriptor(BRAIN_SYNTHETIC_WORLD);
 
 const Index = () => {
+  // The image source decides which physical extent planning works against.
+  const engineKind = resolveImagingEngineKind();
+  const [volumeGeometry, setVolumeGeometry] = useState<VolumeGeometry | null>(null);
+  const planningBounds = useMemo(
+    () => resolvePlanningBounds(engineKind, volumeGeometry, SYNTHETIC_BRAIN_BOUNDS),
+    [engineKind, volumeGeometry]
+  );
+
   const {
     params,
     planning,
@@ -19,7 +37,7 @@ const Index = () => {
     updatePlanning,
     toggleAutoAdjustSliceCount,
     selectCase,
-  } = usePlanningSession();
+  } = usePlanningSession(planningBounds ?? SYNTHETIC_BRAIN_BOUNDS);
 
   const { position: volumePosition, publishPosition } = useVolumePosition();
 
@@ -63,6 +81,8 @@ const Index = () => {
               volumePosition={volumePosition}
               onVolumePositionChange={publishPosition}
               session={session}
+              planningBounds={planningBounds}
+              onVolumeGeometryChange={setVolumeGeometry}
             />
           ))}
         </main>

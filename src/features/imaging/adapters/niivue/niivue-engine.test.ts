@@ -523,3 +523,49 @@ describe("niivue engine click navigation", () => {
     expect(drawScene).not.toHaveBeenCalled();
   });
 });
+
+describe("niivue engine volume geometry", () => {
+  it("has no geometry before a volume is mounted", () => {
+    expect(createNiivueEngine().getVolumeGeometry()).toBeNull();
+  });
+
+  it("has no geometry when the volume carries no spatial metadata", async () => {
+    const { engine } = await mountedEngine("axial");
+    expect(engine.getVolumeGeometry()).toBeNull();
+  });
+
+  it("reads the loaded volume's physical geometry", async () => {
+    const { engine, instance } = await mountedEngine("axial");
+    (instance as unknown as { volumes: unknown[] }).volumes = [
+      {
+        dimsRAS: [3, 180, 216, 180],
+        pixDimsRAS: [1, 1, 1, 1],
+        extentsMinOrtho: [-90, -108, -90],
+        extentsMaxOrtho: [90, 108, 90],
+        oblique_angle: 0,
+        maxShearDeg: 0,
+      },
+    ];
+
+    const geometry = engine.getVolumeGeometry();
+    expect(geometry?.coordinateSystem).toBe("niivue-ortho-mm");
+    expect(geometry?.dimensionsVox).toEqual({ x: 180, y: 216, z: 180 });
+    expect(geometry?.center).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it("stops reporting geometry after disposal", async () => {
+    const { engine, instance } = await mountedEngine("axial");
+    (instance as unknown as { volumes: unknown[] }).volumes = [
+      {
+        dimsRAS: [3, 2, 2, 2],
+        pixDimsRAS: [1, 1, 1, 1],
+        extentsMinOrtho: [-1, -1, -1],
+        extentsMaxOrtho: [1, 1, 1],
+      },
+    ];
+    expect(engine.getVolumeGeometry()).not.toBeNull();
+
+    engine.dispose();
+    expect(engine.getVolumeGeometry()).toBeNull();
+  });
+});

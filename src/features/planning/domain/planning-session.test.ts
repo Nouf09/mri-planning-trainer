@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BRAIN_SYNTHETIC_WORLD } from "@/features/imaging/data/brain-synthetic-world";
+import { boundsFromDescriptor } from "@/features/imaging/domain/volume-geometry";
 import {
   activeSequence,
   toPlanningSession,
@@ -13,7 +14,7 @@ function makeInput(overrides: Partial<PlanningSessionInput> = {}): PlanningSessi
     study: { id: "S1", description: "MRI Brain" },
     sequenceId: "sequence-1",
     protocolName: "T1 MPRAGE",
-    world: BRAIN_SYNTHETIC_WORLD,
+    bounds: boundsFromDescriptor(BRAIN_SYNTHETIC_WORLD),
     centerX: 0.5,
     centerY: 0.5,
     angulation: 0,
@@ -70,16 +71,16 @@ describe("toPlanningSession", () => {
   });
 
   it("scales with the supplied descriptor rather than a fixed constant", () => {
-    const world = { widthMm: 200, heightMm: 200, depthMm: 200, center: { x: 0, y: 0, z: 0 } };
+    const bounds = boundsFromDescriptor({ widthMm: 200, heightMm: 200, depthMm: 200, center: { x: 0, y: 0, z: 0 } });
     const prescription = activeSequence(
-      toPlanningSession(makeInput({ world, centerX: 1, centerY: 0.5 }))
+      toPlanningSession(makeInput({ bounds, centerX: 1, centerY: 0.5 }))
     )!.prescription;
     expect(prescription.center.x).toBeCloseTo(100, 9);
   });
 
   it("respects a descriptor whose centre is not the origin", () => {
-    const world = { widthMm: 300, heightMm: 300, depthMm: 300, center: { x: 10, y: 20, z: 30 } };
-    const prescription = activeSequence(toPlanningSession(makeInput({ world })))!.prescription;
+    const bounds = boundsFromDescriptor({ widthMm: 300, heightMm: 300, depthMm: 300, center: { x: 10, y: 20, z: 30 } });
+    const prescription = activeSequence(toPlanningSession(makeInput({ bounds })))!.prescription;
     expect(prescription.center).toEqual({ x: 10, y: 20, z: 30 });
   });
 

@@ -1,5 +1,5 @@
 import type { VolumePosition } from "@/features/imaging/domain/volume-position";
-import type { SyntheticWorldDescriptor } from "@/features/imaging/domain/synthetic-world";
+import { boundsSize, type WorldBounds } from "@/features/imaging/domain/volume-geometry";
 import type { PlaneOrientation } from "@/features/planning/domain/orientation";
 import type { Prescription } from "@/features/planning/domain/prescription";
 import { dot, subtract, type Vec3 } from "@/features/planning/domain/vector";
@@ -54,15 +54,19 @@ export function coverageMm(prescription: Prescription): number {
   return sliceCount * sliceThickness + (sliceCount - 1) * sliceGap;
 }
 
-/** Extent of an image source along a view's own axes. */
+/**
+ * Extent of an image source along a view's own axes.
+ *
+ * Takes bounds rather than a particular descriptor so synthetic and real image
+ * sources share one projection path.
+ */
 export function viewExtentMm(
-  world: SyntheticWorldDescriptor,
+  bounds: WorldBounds,
   view: PlaneOrientation
 ): { uMm: number; vMm: number } {
+  const size = boundsSize(bounds);
   const along = (axis: Vec3) =>
-    Math.abs(axis.x) * world.widthMm +
-    Math.abs(axis.y) * world.heightMm +
-    Math.abs(axis.z) * world.depthMm;
+    Math.abs(axis.x) * size.x + Math.abs(axis.y) * size.y + Math.abs(axis.z) * size.z;
 
   return { uMm: along(view.readDirection), vMm: along(view.phaseDirection) };
 }

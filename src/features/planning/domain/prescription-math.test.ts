@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AXIAL, CORONAL, SAGITTAL, withInPlaneRotation } from "@/features/planning/domain/orientation";
 import type { Prescription } from "@/features/planning/domain/prescription";
+import { boundsFromDescriptor } from "@/features/imaging/domain/volume-geometry";
 import {
   coverageMm,
   projectToViewPlane,
@@ -58,7 +59,7 @@ describe("slice geometry", () => {
 });
 
 describe("viewExtentMm", () => {
-  const world = { widthMm: 300, heightMm: 260, depthMm: 200, center: ORIGIN };
+  const world = boundsFromDescriptor({ widthMm: 300, heightMm: 260, depthMm: 200, center: ORIGIN });
 
   it("measures the source along each view's own axes", () => {
     expect(viewExtentMm(world, AXIAL)).toEqual({ uMm: 300, vMm: 260 });

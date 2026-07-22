@@ -6,6 +6,11 @@ import {
   type VolumePosition,
 } from "@/features/imaging/domain/volume-position";
 import { voxelDeltaForPlane } from "@/features/imaging/domain/slice-navigation";
+import type { VolumeGeometry } from "@/features/imaging/domain/volume-geometry";
+import {
+  readVolumeGeometry,
+  type VolumeSpatialSource,
+} from "@/features/imaging/adapters/niivue/read-volume-geometry";
 
 /**
  * Minimal surface this adapter uses. Declared locally so Niivue types never
@@ -22,6 +27,7 @@ interface NiivueLike {
   frac2mm(frac: [number, number, number]): ArrayLike<number>;
   scene: { crosshairPos: ArrayLike<number> };
   onLocationChange: (location: unknown) => void;
+  volumes?: VolumeSpatialSource[];
 }
 
 /** The subset of Niivue's location payload this adapter consumes. */
@@ -166,6 +172,11 @@ export function createNiivueEngine(): VolumeImagingEngine {
       // onLocationChange, so this travels the same path as any other
       // user-driven interaction.
       instance.moveCrosshairInVox(x, y, z);
+    },
+
+    getVolumeGeometry(): VolumeGeometry | null {
+      if (!instance) return null;
+      return readVolumeGeometry(instance.volumes?.[0]);
     },
 
     navigateToScreenPoint(clientX: number, clientY: number): void {
