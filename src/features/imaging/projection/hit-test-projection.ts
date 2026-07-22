@@ -1,15 +1,23 @@
 import type {
   ProjectedPoint,
-  ProjectedRectangle,
   ProjectionResult,
 } from "@/features/imaging/projection/projection-model";
+import {
+  isFinitePoint,
+  nearestCorner,
+  pointInConvexQuad,
+  quadEdgeMidpoint,
+  quadOutwardNormal,
+  topEdgeIndex,
+  type ProjectedQuad,
+} from "@/features/imaging/projection/quad";
 
 /** Which part of a prescription a pointer is over. */
 export type PrescriptionHandle = "move" | "resize" | "rotate" | null;
 
 /** Grab radius for corner and rotate handles. */
 export const HANDLE_RADIUS_PX = 12;
-/** Distance the rotate knob sits beyond the top edge. */
+/** Distance the rotate knob sits beyond the chosen edge. */
 export const ROTATE_STALK_PX = 20;
 
 export interface HitTestOptions {
@@ -17,21 +25,28 @@ export interface HitTestOptions {
   rotateStalkPx?: number;
 }
 
-/** Brings a viewport point into a shape's own rotated frame. */
-function toShapeLocal(point: ProjectedPoint, shape: ProjectedRectangle): ProjectedPoint {
-  const dx = point.x - shape.center.x;
-  const dy = point.y - shape.center.y;
-  const cos = Math.cos(-shape.rotationRad);
-  const sin = Math.sin(-shape.rotationRad);
-  return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
+/**
+ * Where the rotate knob sits for a projected outline.
+ *
+ * Shared with the renderer so the drawn knob and the grabbable knob are the
+ * same point by construction.
+ */
+export function rotateKnobPosition(
+  quad: ProjectedQuad,
+  stalkPx: number = ROTATE_STALK_PX
+): ProjectedPoint | null {
+  const edge = topEdgeIndex(quad);
+  const outward = quadOutwardNormal(quad, edge);
+  if (!outward) return null;
+  const midpoint = quadEdgeMidpoint(quad, edge);
+  return { x: midpoint.x + outward.x * stalkPx, y: midpoint.y + outward.y * stalkPx };
 }
 
 /**
  * Hit-tests the geometry that was actually drawn.
  *
- * Working from the projection rather than from planning state keeps the
- * interactive regions identical to the painted ones: both come from the same
- * projected pixels, so they cannot drift apart.
+ * Working from the projected outline keeps the interactive regions identical to
+ * the painted ones, whatever the prescription's orientation.
  */
 export function hitTestProjection(
   point: ProjectedPoint,
@@ -40,29 +55,17 @@ export function hitTestProjection(
 ): PrescriptionHandle {
   if (!projection.isVisible) return null;
 
-  const shape: ProjectedRectangle | null = projection.rectangle ?? projection.slab;
-  if (!shape) return null;
-  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+  const outline = projection.outline;
+  if (outline === null) return null;
+  if (!isFinitePoint(point)) return null;
 
   const handleRadius = options.handleRadiusPx ?? HANDLE_RADIUS_PX;
   const stalk = options.rotateStalkPx ?? ROTATE_STALK_PX;
 
-  const local = toShapeLocal(point, shape);
-  const halfWidth = shape.widthPx / 2;
-  const halfHeight = shape.heightPx / 2;
+  const knob = rotateKnobPosition(outline, stalk);
+  if (knob && Math.hypot(point.x - knob.x, point.y - knob.y) < handleRadius) return "rotate";
 
-  if (Math.hypot(local.x, local.y - (-halfHeight - stalk)) < handleRadius) return "rotate";
+  if (nearestCorner(point, outline).distance < handleRadius) return "resize";
 
-  const corners: Array<[number, number]> = [
-    [-halfWidth, -halfHeight],
-    [halfWidth, -halfHeight],
-    [halfWidth, halfHeight],
-    [-halfWidth, halfHeight],
-  ];
-  for (const [cornerX, cornerY] of corners) {
-    if (Math.hypot(local.x - cornerX, local.y - cornerY) < handleRadius) return "resize";
-  }
-
-  if (Math.abs(local.x) < halfWidth && Math.abs(local.y) < halfHeight) return "move";
-  return null;
+  return pointInConvexQuad(point, outline) ? "move" : null;
 }

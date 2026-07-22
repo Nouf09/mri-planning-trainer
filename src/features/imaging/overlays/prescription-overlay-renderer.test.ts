@@ -4,174 +4,122 @@ import {
   EMPTY_PROJECTION,
   type ProjectionResult,
 } from "@/features/imaging/projection/projection-model";
+import type { ProjectedQuad } from "@/features/imaging/projection/quad";
+import { rotateKnobPosition } from "@/features/imaging/projection/hit-test-projection";
 
 function makeContext() {
   return {
-    clearRect: vi.fn(),
-    save: vi.fn(),
-    restore: vi.fn(),
-    translate: vi.fn(),
-    rotate: vi.fn(),
-    strokeRect: vi.fn(),
-    setLineDash: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-    arc: vi.fn(),
-    fill: vi.fn(),
-    strokeStyle: "",
-    fillStyle: "",
-    lineWidth: 0,
-    globalAlpha: 1,
+    clearRect: vi.fn(), save: vi.fn(), restore: vi.fn(), translate: vi.fn(), rotate: vi.fn(),
+    strokeRect: vi.fn(), setLineDash: vi.fn(), beginPath: vi.fn(), closePath: vi.fn(),
+    moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(), arc: vi.fn(), fill: vi.fn(),
+    strokeStyle: "", fillStyle: "", lineWidth: 0, globalAlpha: 1,
   } as unknown as CanvasRenderingContext2D & Record<string, ReturnType<typeof vi.fn>>;
 }
 
-const viewport = { width: 400, height: 400 };
+const viewport = { width: 600, height: 600 };
 
-function faceProjection(overrides: Partial<ProjectionResult> = {}): ProjectionResult {
+const OUTLINE: ProjectedQuad = [
+  { x: 200, y: 200 },
+  { x: 400, y: 200 },
+  { x: 400, y: 320 },
+  { x: 200, y: 320 },
+];
+
+const OBLIQUE: ProjectedQuad = [
+  { x: 200, y: 200 },
+  { x: 380, y: 240 },
+  { x: 420, y: 340 },
+  { x: 240, y: 300 },
+];
+
+function projection(overrides: Partial<ProjectionResult> = {}): ProjectionResult {
   return {
     mode: "face",
-    rectangle: { center: { x: 250, y: 180 }, widthPx: 200, heightPx: 160, rotationRad: 0 },
-    slab: null,
-    sliceLines: [],
+    outline: OUTLINE,
+    sliceOutlines: [],
+    normalStepPx: { x: 0, y: 0 },
     outOfPlaneOffsetMm: 0,
     isVisible: true,
     ...overrides,
   };
 }
 
-function edgeProjection(): ProjectionResult {
-  return {
-    mode: "edge",
-    rectangle: null,
-    slab: {
-      center: { x: 200, y: 200 },
-      widthPx: 200,
-      heightPx: 24,
-      rotationRad: 0,
-      thicknessPx: 24,
-    },
-    sliceLines: [
-      { start: { x: 100, y: 212 }, end: { x: 300, y: 212 } },
-      { start: { x: 100, y: 188 }, end: { x: 300, y: 188 } },
-    ],
-    outOfPlaneOffsetMm: 0,
-    isVisible: true,
-  };
-}
-
 describe("prescription overlay renderer", () => {
   it("clears before drawing", () => {
     const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", faceProjection());
-    expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, 400, 400);
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection());
+    expect(ctx.clearRect).toHaveBeenCalledWith(0, 0, 600, 600);
   });
 
-  it("paints the rectangle where the projection puts it", () => {
+  it("strokes the outline corners in order", () => {
     const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", faceProjection());
-    expect(ctx.translate).toHaveBeenCalledWith(250, 180);
-    expect(ctx.strokeRect).toHaveBeenCalledWith(-100, -80, 200, 160);
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection());
+    expect(ctx.moveTo).toHaveBeenCalledWith(200, 200);
+    expect(ctx.lineTo).toHaveBeenCalledWith(400, 200);
+    expect(ctx.lineTo).toHaveBeenCalledWith(400, 320);
+    expect(ctx.lineTo).toHaveBeenCalledWith(200, 320);
+    expect(ctx.closePath).toHaveBeenCalled();
   });
 
-  it("applies the rotation it is given without adjusting it", () => {
+  it("paints a foreshortened outline exactly as projected", () => {
     const ctx = makeContext();
-    const projection = faceProjection({
-      rectangle: { center: { x: 200, y: 200 }, widthPx: 100, heightPx: 100, rotationRad: -Math.PI / 2 },
-    });
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection);
-    expect(ctx.rotate).toHaveBeenCalledWith(-Math.PI / 2);
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection({ outline: OBLIQUE }));
+    expect(ctx.moveTo).toHaveBeenCalledWith(200, 200);
+    expect(ctx.lineTo).toHaveBeenCalledWith(380, 240);
   });
 
-  it("draws no slice lines when there are none", () => {
+  it("never rotates the canvas, because corners already carry the rotation", () => {
     const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", faceProjection());
-    expect(ctx.moveTo).not.toHaveBeenCalled();
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection({ outline: OBLIQUE }));
+    expect(ctx.rotate).not.toHaveBeenCalled();
   });
 
-  it("paints the slab and its slice boundaries edge on", () => {
+  it("draws each slice outline as its own quad", () => {
     const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "coronal", edgeProjection());
-    expect(ctx.translate).toHaveBeenCalledWith(200, 200);
-    expect(ctx.moveTo).toHaveBeenCalledTimes(2);
-    expect(ctx.moveTo).toHaveBeenCalledWith(100, 212);
-    expect(ctx.lineTo).toHaveBeenCalledWith(300, 212);
+    const shifted: ProjectedQuad = OUTLINE.map((c) => ({ x: c.x, y: c.y + 20 })) as unknown as ProjectedQuad;
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "coronal", projection({ sliceOutlines: [OUTLINE, shifted] }));
+    expect(ctx.moveTo).toHaveBeenCalledWith(200, 220);
   });
 
   it("draws nothing for an invisible projection", () => {
     const ctx = makeContext();
     createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", EMPTY_PROJECTION);
     expect(ctx.clearRect).toHaveBeenCalled();
-    expect(ctx.strokeRect).not.toHaveBeenCalled();
-  });
-
-  it("draws nothing when no shape is supplied", () => {
-    const ctx = makeContext();
-    const projection = faceProjection({ rectangle: null });
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection);
-    expect(ctx.strokeRect).not.toHaveBeenCalled();
-  });
-
-  it("performs no geometry of its own", () => {
-    const ctx = makeContext();
-    const projection = faceProjection();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection);
-    // Coordinates are painted exactly as provided.
-    expect(ctx.translate).toHaveBeenCalledWith(
-      projection.rectangle!.center.x,
-      projection.rectangle!.center.y
-    );
+    expect(ctx.moveTo).not.toHaveBeenCalled();
   });
 });
 
 describe("prescription overlay handles", () => {
-  it("draws no handles by default", () => {
+  it("draws only the centre dot by default", () => {
     const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", faceProjection());
-    // Only the centre dot is filled.
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection());
     expect(ctx.arc).toHaveBeenCalledTimes(1);
   });
 
-  it("draws four corner handles and a rotate knob when asked", () => {
+  it("draws four corner handles and a knob when asked", () => {
     const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", faceProjection(), {
-      showHandles: true,
-    });
-    // Centre dot + four corners + rotate knob.
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection(), { showHandles: true });
     expect(ctx.arc).toHaveBeenCalledTimes(6);
   });
 
-  it("places corner handles on the drawn rectangle", () => {
+  it("places corner handles on the projected corners", () => {
     const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", faceProjection(), {
-      showHandles: true,
-    });
-    expect(ctx.arc).toHaveBeenCalledWith(-100, -80, 4, 0, Math.PI * 2);
-    expect(ctx.arc).toHaveBeenCalledWith(100, 80, 4, 0, Math.PI * 2);
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection({ outline: OBLIQUE }), { showHandles: true });
+    for (const corner of OBLIQUE) {
+      expect(ctx.arc).toHaveBeenCalledWith(corner.x, corner.y, 4, 0, Math.PI * 2);
+    }
   });
 
-  it("draws the rotate stalk above the top edge", () => {
+  it("places the knob where hit testing expects it", () => {
     const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", faceProjection(), {
-      showHandles: true,
-    });
-    expect(ctx.moveTo).toHaveBeenCalledWith(0, -80);
-    expect(ctx.lineTo).toHaveBeenCalledWith(0, -100);
-    expect(ctx.arc).toHaveBeenCalledWith(0, -100, 5, 0, Math.PI * 2);
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", projection({ outline: OBLIQUE }), { showHandles: true });
+    const knob = rotateKnobPosition(OBLIQUE)!;
+    expect(ctx.arc).toHaveBeenCalledWith(knob.x, knob.y, 5, 0, Math.PI * 2);
   });
 
-  it("draws no handles on a read-only edge-on slab", () => {
+  it("draws no handles in read-only views", () => {
     const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "coronal", edgeProjection());
+    createPrescriptionOverlayRenderer().render(ctx, viewport, "coronal", projection());
     expect(ctx.arc).toHaveBeenCalledTimes(1);
-  });
-
-  it("draws no handles for an invisible projection", () => {
-    const ctx = makeContext();
-    createPrescriptionOverlayRenderer().render(ctx, viewport, "axial", EMPTY_PROJECTION, {
-      showHandles: true,
-    });
-    expect(ctx.arc).not.toHaveBeenCalled();
   });
 });

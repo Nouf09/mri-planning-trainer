@@ -21,6 +21,7 @@ import { activeSequence, type PlanningSession } from "@/features/planning/domain
 import { createFittedCamera } from "@/features/imaging/projection/viewport-camera";
 import { projectPrescription } from "@/features/imaging/projection/project-prescription";
 import { hitTestProjection } from "@/features/imaging/projection/hit-test-projection";
+import type { PrescriptionOrientationInput } from "@/features/planning/domain/prescription-orientation";
 import type { ProjectionResult } from "@/features/imaging/projection/projection-model";
 
 const planeLabelStyles: Record<AnatomicalPlane, string> = {
@@ -42,17 +43,18 @@ interface ViewportProps {
   /** Physical extent of the active image source, or null when unknown. */
   planningBounds: WorldBounds | null;
   onVolumeGeometryChange: (geometry: VolumeGeometry | null) => void;
+  onOrientationChange: (patch: Partial<PrescriptionOrientationInput>) => void;
 }
 
 const prescriptionOverlay = createPrescriptionOverlayRenderer();
 
 type DragMode = "move" | "resize" | "rotate" | null;
 
-export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session, planningBounds, onVolumeGeometryChange }: ViewportProps) {
+export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session, planningBounds, onVolumeGeometryChange, onOrientationChange }: ViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
-  const dragStart = useRef({ x: 0, y: 0, cx: 0, cy: 0, fovR: 0, fovP: 0, ang: 0 });
+  const dragStart = useRef({ x: 0, y: 0, cx: 0, cy: 0, fovR: 0, fovP: 0, ang: 0, inPlane: 0 });
   const { engine, overlay } = useImagingEngine();
 
   const geometry: PlanningGeometry = {
@@ -178,7 +180,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
     }
     e.preventDefault();
     const pos = getCanvasPos(e);
-    dragStart.current = { x: pos.x, y: pos.y, cx: planning.centerX, cy: planning.centerY, fovR: params.fovRead, fovP: params.fovPhase, ang: params.angulation };
+    dragStart.current = { x: pos.x, y: pos.y, cx: planning.centerX, cy: planning.centerY, fovR: params.fovRead, fovP: params.fovPhase, ang: params.angulation, inPlane: params.orientation.inPlaneDeg };
     setDragMode(mode);
   };
 
@@ -212,8 +214,11 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
       // World rendering maps the plane's phase axis upward, so a screen-space
       // turn corresponds to the opposite change in angulation. Without this the
       // prescription would rotate away from the pointer.
-      const delta = planningMode === "world" ? -screenDelta : screenDelta;
-      onParamChange("angulation", Math.round(Math.max(-45, Math.min(45, st.ang + delta))));
+      if (planningMode === "world") {
+        onOrientationChange({ inPlaneDeg: Math.round(st.inPlane - screenDelta) });
+      } else {
+        onParamChange("angulation", Math.round(Math.max(-45, Math.min(45, st.ang + screenDelta))));
+      }
     }
   };
 

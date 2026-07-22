@@ -1,6 +1,7 @@
 import type { AnatomicalPlane, ViewportSize } from "@/features/imaging/domain/viewport.types";
 import type { ProjectionResult } from "@/features/imaging/projection/projection-model";
-import { ROTATE_STALK_PX } from "@/features/imaging/projection/hit-test-projection";
+import { rotateKnobPosition } from "@/features/imaging/projection/hit-test-projection";
+import { quadCenter, quadEdgeMidpoint, topEdgeIndex, type ProjectedQuad } from "@/features/imaging/projection/quad";
 
 const planeColors: Record<AnatomicalPlane, { line: string; fov: string }> = {
   sagittal: { line: "rgba(200,170,50,0.7)", fov: "rgba(200,170,50,0.35)" },
@@ -23,78 +24,79 @@ export interface PrescriptionOverlayRenderer {
   ): void;
 }
 
+function tracePath(ctx: CanvasRenderingContext2D, quad: ProjectedQuad): void {
+  ctx.beginPath();
+  ctx.moveTo(quad[0].x, quad[0].y);
+  ctx.lineTo(quad[1].x, quad[1].y);
+  ctx.lineTo(quad[2].x, quad[2].y);
+  ctx.lineTo(quad[3].x, quad[3].y);
+  ctx.closePath();
+}
+
 /**
  * Paints an already-projected prescription.
  *
  * Every coordinate arrives in viewport pixels, so this performs no geometry:
- * it only issues drawing commands.
+ * it only issues drawing commands. Handle positions come from the same helpers
+ * hit testing uses.
  */
 export function createPrescriptionOverlayRenderer(): PrescriptionOverlayRenderer {
   return {
     render(ctx, viewport, plane, projection, options = {}) {
       ctx.clearRect(0, 0, viewport.width, viewport.height);
-      if (!projection.isVisible) return;
-
-      const shape = projection.rectangle ?? projection.slab;
-      if (!shape) return;
+      if (!projection.isVisible || projection.outline === null) return;
 
       const colors = planeColors[plane];
+      const outline = projection.outline;
+
+      if (projection.sliceOutlines.length > 0) {
+        ctx.save();
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.6;
+        for (const slice of projection.sliceOutlines) {
+          tracePath(ctx, slice);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
 
       ctx.save();
-      ctx.translate(shape.center.x, shape.center.y);
-      ctx.rotate(shape.rotationRad);
-
       ctx.strokeStyle = colors.fov;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([6, 4]);
-      ctx.strokeRect(-shape.widthPx / 2, -shape.heightPx / 2, shape.widthPx, shape.heightPx);
+      tracePath(ctx, outline);
+      ctx.stroke();
       ctx.setLineDash([]);
 
+      const center = quadCenter(outline);
       ctx.fillStyle = colors.line;
       ctx.beginPath();
-      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.arc(center.x, center.y, 3, 0, Math.PI * 2);
       ctx.fill();
 
       if (options.showHandles) {
-        const halfWidth = shape.widthPx / 2;
-        const halfHeight = shape.heightPx / 2;
-
-        for (const [x, y] of [
-          [-halfWidth, -halfHeight],
-          [halfWidth, -halfHeight],
-          [halfWidth, halfHeight],
-          [-halfWidth, halfHeight],
-        ]) {
+        for (const corner of outline) {
           ctx.beginPath();
-          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.arc(corner.x, corner.y, 4, 0, Math.PI * 2);
           ctx.fill();
         }
 
-        ctx.beginPath();
-        ctx.moveTo(0, -halfHeight);
-        ctx.lineTo(0, -halfHeight - ROTATE_STALK_PX);
-        ctx.strokeStyle = colors.line;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(0, -halfHeight - ROTATE_STALK_PX, 5, 0, Math.PI * 2);
-        ctx.fill();
+        const knob = rotateKnobPosition(outline);
+        if (knob) {
+          const anchor = quadEdgeMidpoint(outline, topEdgeIndex(outline));
+          ctx.beginPath();
+          ctx.moveTo(anchor.x, anchor.y);
+          ctx.lineTo(knob.x, knob.y);
+          ctx.strokeStyle = colors.line;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(knob.x, knob.y, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
-      ctx.restore();
-
-      if (projection.sliceLines.length === 0) return;
-
-      ctx.save();
-      ctx.strokeStyle = colors.line;
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.6;
-      for (const line of projection.sliceLines) {
-        ctx.beginPath();
-        ctx.moveTo(line.start.x, line.start.y);
-        ctx.lineTo(line.end.x, line.end.y);
-        ctx.stroke();
-      }
       ctx.restore();
     },
   };

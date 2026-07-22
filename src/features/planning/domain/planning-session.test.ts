@@ -17,7 +17,7 @@ function makeInput(overrides: Partial<PlanningSessionInput> = {}): PlanningSessi
     bounds: boundsFromDescriptor(BRAIN_SYNTHETIC_WORLD),
     centerX: 0.5,
     centerY: 0.5,
-    angulation: 0,
+    orientation: { tiltReadDeg: 0, tiltPhaseDeg: 0, inPlaneDeg: 0 },
     fovRead: 230,
     fovPhase: 230,
     sliceThickness: 5,
@@ -86,7 +86,7 @@ describe("toPlanningSession", () => {
 
   it("bakes the angulation scalar into an orthonormal orientation", () => {
     const prescription = activeSequence(
-      toPlanningSession(makeInput({ angulation: 25 }))
+      toPlanningSession(makeInput({ orientation: { tiltReadDeg: 0, tiltPhaseDeg: 0, inPlaneDeg: 25 } }))
     )!.prescription;
     expect(isOrthonormalOrientation(prescription.orientation, 1e-9)).toBe(true);
   });

@@ -6,7 +6,11 @@ import { Activity } from "lucide-react";
 import { useMemo, useState } from "react";
 import { usePlanningSession } from "@/features/planning/hooks/use-planning-session";
 import { useVolumePosition } from "@/features/imaging/hooks/use-volume-position";
-import { resolveImagingEngineKind } from "@/features/imaging/data/imaging-config";
+import {
+  resolveEffectivePlanningMode,
+  resolveImagingEngineKind,
+  resolvePlanningMode,
+} from "@/features/imaging/data/imaging-config";
 import { BRAIN_SYNTHETIC_WORLD } from "@/features/imaging/data/brain-synthetic-world";
 import {
   boundsFromDescriptor,
@@ -33,11 +37,18 @@ const Index = () => {
     selectedProtocol,
     selectedCaseId,
     updateParam,
+    updateOrientation,
     selectProtocol,
     updatePlanning,
     toggleAutoAdjustSliceCount,
     selectCase,
   } = usePlanningSession(planningBounds ?? SYNTHETIC_BRAIN_BOUNDS);
+
+  const planningMode = resolveEffectivePlanningMode(
+    resolvePlanningMode(),
+    engineKind,
+    planningBounds !== null
+  );
 
   const { position: volumePosition, publishPosition } = useVolumePosition();
 
@@ -83,12 +94,15 @@ const Index = () => {
               session={session}
               planningBounds={planningBounds}
               onVolumeGeometryChange={setVolumeGeometry}
+              onOrientationChange={updateOrientation}
             />
           ))}
         </main>
         <ParametersPanel
           params={params}
           onParamChange={updateParam}
+          planningMode={planningMode}
+          onOrientationChange={updateOrientation}
           autoAdjustSliceCount={autoAdjustSliceCount}
           onToggleAutoAdjust={toggleAutoAdjustSliceCount}
           selectedProtocol={selectedProtocol}

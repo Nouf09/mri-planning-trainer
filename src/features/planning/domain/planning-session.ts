@@ -3,7 +3,12 @@ import {
   boundsSize,
   type WorldBounds,
 } from "@/features/imaging/domain/volume-geometry";
-import { AXIAL, withInPlaneRotation } from "@/features/planning/domain/orientation";
+import { AXIAL } from "@/features/planning/domain/orientation";
+import {
+  NEUTRAL_ORIENTATION_INPUT,
+  orientationFromAngles,
+  type PrescriptionOrientationInput,
+} from "@/features/planning/domain/prescription-orientation";
 import type { Prescription } from "@/features/planning/domain/prescription";
 
 /** Fictional identity for the training scenario. Never a real person. */
@@ -48,7 +53,7 @@ export interface PlanningSessionInput {
   /** Normalized viewport centre carried by the legacy planning state, 0..1. */
   centerX: number;
   centerY: number;
-  angulation: number;
+  orientation: PrescriptionOrientationInput;
   fovRead: number;
   fovPhase: number;
   sliceThickness: number;
@@ -77,7 +82,7 @@ function centerInWorld(input: PlanningSessionInput) {
 }
 
 export function toPlanningSession(input: PlanningSessionInput): PlanningSession {
-  const orientation = withInPlaneRotation(AXIAL, input.angulation) ?? AXIAL;
+  const orientation = orientationFromAngles(input.orientation ?? NEUTRAL_ORIENTATION_INPUT) ?? AXIAL;
 
   const prescription: Prescription = {
     center: centerInWorld(input),

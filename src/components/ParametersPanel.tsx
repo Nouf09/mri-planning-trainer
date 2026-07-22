@@ -2,12 +2,22 @@ import { useMemo } from "react";
 import { Slider } from "@/components/ui/slider";
 
 import type { ScanParams } from "@/features/planning/domain/planning.types";
+import type { PlanningMode } from "@/features/imaging/data/imaging-config";
+import {
+  MAX_ORIENTATION_ANGLE_DEG,
+  type PrescriptionOrientationInput,
+} from "@/features/planning/domain/prescription-orientation";
 import { calculateCoverage } from "@/features/guidance/domain/coverage";
 import { evaluatePlanningFeedback } from "@/features/guidance/domain/planning-feedback";
 import { evaluatePlanningGuidance } from "@/features/guidance/domain/planning-guidance";
 
+/** Only the scalar acquisition parameters are slider-driven. */
+type NumericParamKey = {
+  [K in keyof ScanParams]: ScanParams[K] extends number ? K : never;
+}[keyof ScanParams];
+
 interface ParamConfig {
-  key: keyof ScanParams;
+  key: NumericParamKey;
   label: string;
   unit: string;
   min: number;
@@ -24,16 +34,84 @@ const paramConfigs: ParamConfig[] = [
   { key: "angulation", label: "Angulation (Yaw)", unit: "°", min: -45, max: 45, step: 1 },
 ];
 
+interface SliderRow {
+  id: string;
+  label: string;
+  unit: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  note?: string;
+  onChange: (value: number) => void;
+}
+
 interface ParametersPanelProps {
   params: ScanParams;
   onParamChange: (key: keyof ScanParams, value: number) => void;
+  planningMode: PlanningMode;
+  onOrientationChange: (patch: Partial<PrescriptionOrientationInput>) => void;
   autoAdjustSliceCount?: boolean;
   onToggleAutoAdjust?: () => void;
   selectedProtocol?: string;
   selectedCaseId: string | null;
 }
 
-export function ParametersPanel({ params, onParamChange, autoAdjustSliceCount, onToggleAutoAdjust, selectedProtocol, selectedCaseId }: ParametersPanelProps) {
+export function ParametersPanel({ params, onParamChange, planningMode, onOrientationChange, autoAdjustSliceCount, onToggleAutoAdjust, selectedProtocol, selectedCaseId }: ParametersPanelProps) {
+  // Legacy planning turns the slice group with a single angulation value; world
+  // planning uses the orientation object instead, so only one set is offered.
+  const isWorldPlanning = planningMode === "world";
+
+  const rows: SliderRow[] = [
+    ...paramConfigs
+      .filter((cfg) => !(isWorldPlanning && cfg.key === "angulation"))
+      .map((cfg) => ({
+        id: cfg.key,
+        label: cfg.label,
+        unit: cfg.unit,
+        min: cfg.min,
+        max: cfg.max,
+        step: cfg.step,
+        value: params[cfg.key],
+        note: cfg.key === "sliceCount" && autoAdjustSliceCount ? "Auto-adjust enabled" : undefined,
+        onChange: (value: number) => onParamChange(cfg.key, value),
+      })),
+    ...(isWorldPlanning
+      ? [
+          {
+            id: "tiltReadDeg",
+            label: "Tilt Read",
+            unit: "\u00b0",
+            min: -MAX_ORIENTATION_ANGLE_DEG,
+            max: MAX_ORIENTATION_ANGLE_DEG,
+            step: 1,
+            value: params.orientation.tiltReadDeg,
+            onChange: (value: number) => onOrientationChange({ tiltReadDeg: value }),
+          },
+          {
+            id: "tiltPhaseDeg",
+            label: "Tilt Phase",
+            unit: "\u00b0",
+            min: -MAX_ORIENTATION_ANGLE_DEG,
+            max: MAX_ORIENTATION_ANGLE_DEG,
+            step: 1,
+            value: params.orientation.tiltPhaseDeg,
+            onChange: (value: number) => onOrientationChange({ tiltPhaseDeg: value }),
+          },
+          {
+            id: "inPlaneDeg",
+            label: "In-Plane Rotation",
+            unit: "\u00b0",
+            min: -MAX_ORIENTATION_ANGLE_DEG,
+            max: MAX_ORIENTATION_ANGLE_DEG,
+            step: 1,
+            value: params.orientation.inPlaneDeg,
+            onChange: (value: number) => onOrientationChange({ inPlaneDeg: value }),
+          },
+        ]
+      : []),
+  ];
+
   const coverage = useMemo(
     () => calculateCoverage(params.sliceCount, params.sliceThickness, params.sliceGap),
     [params.sliceCount, params.sliceThickness, params.sliceGap]
@@ -62,25 +140,25 @@ export function ParametersPanel({ params, onParamChange, autoAdjustSliceCount, o
         <div>
           <h3 className="font-mono text-[10px] font-semibold tracking-widest uppercase text-muted-foreground mb-4">Geometry</h3>
           <div className="space-y-5">
-            {paramConfigs.map((cfg) => (
-              <div key={cfg.key}>
+            {rows.map((cfg) => (
+              <div key={cfg.id}>
                 <div className="flex items-baseline justify-between mb-2">
                   <label className="text-[11px] font-mono font-medium text-foreground">
                     {cfg.label}
                   </label>
                   <span className="text-[11px] font-mono font-semibold text-primary tabular-nums">
-                    {cfg.step < 1 ? params[cfg.key].toFixed(1) : params[cfg.key]}
+                    {cfg.step < 1 ? cfg.value.toFixed(1) : cfg.value}
                     {cfg.unit && (
                       <span className="text-muted-foreground ml-0.5">{cfg.unit}</span>
                     )}
                   </span>
                 </div>
-                {cfg.key === "sliceCount" && autoAdjustSliceCount && (
-                  <p className="text-[9px] font-mono text-primary/70 italic mb-1.5">Auto-adjust enabled</p>
+                {cfg.note && (
+                  <p className="text-[9px] font-mono text-primary/70 italic mb-1.5">{cfg.note}</p>
                 )}
                 <Slider
-                  value={[params[cfg.key]]}
-                  onValueChange={(val) => onParamChange(cfg.key, val[0])}
+                  value={[cfg.value]}
+                  onValueChange={(val) => cfg.onChange(val[0])}
                   min={cfg.min}
                   max={cfg.max}
                   step={cfg.step}

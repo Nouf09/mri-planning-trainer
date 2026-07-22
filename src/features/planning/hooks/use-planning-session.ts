@@ -1,5 +1,9 @@
 import { useState, useCallback, useMemo } from "react";
 import type { WorldBounds } from "@/features/imaging/domain/volume-geometry";
+import {
+  clampOrientationInput,
+  type PrescriptionOrientationInput,
+} from "@/features/planning/domain/prescription-orientation";
 import { toPlanningSession } from "@/features/planning/domain/planning-session";
 import {
   DEFAULT_SEQUENCE_ID,
@@ -52,6 +56,16 @@ export function usePlanningSession(planningBounds: WorldBounds) {
     setPlanning((prev) => ({ ...prev, ...s }));
   }, []);
 
+  const updateOrientation = useCallback(
+    (patch: Partial<PrescriptionOrientationInput>) => {
+      setParams((prev) => ({
+        ...prev,
+        orientation: clampOrientationInput({ ...prev.orientation, ...patch }),
+      }));
+    },
+    []
+  );
+
   const toggleAutoAdjustSliceCount = useCallback(() => {
     setAutoAdjustSliceCount((prev) => !prev);
   }, []);
@@ -72,7 +86,7 @@ export function usePlanningSession(planningBounds: WorldBounds) {
         bounds: planningBounds,
         centerX: planning.centerX,
         centerY: planning.centerY,
-        angulation: params.angulation,
+        orientation: params.orientation,
         fovRead: params.fovRead,
         fovPhase: params.fovPhase,
         sliceThickness: params.sliceThickness,
@@ -93,6 +107,7 @@ export function usePlanningSession(planningBounds: WorldBounds) {
     selectProtocol,
     updatePlanning,
     toggleAutoAdjustSliceCount,
+    updateOrientation,
     selectCase,
   };
 }

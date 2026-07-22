@@ -10,26 +10,29 @@ export interface Point2Dmm {
   vMm: number;
 }
 
-export interface SliceLineMm {
-  start: Point2Dmm;
-  end: Point2Dmm;
-}
+/** Four ordered corners in the view plane's millimetre basis. */
+export type PlanarQuadMm = readonly [Point2Dmm, Point2Dmm, Point2Dmm, Point2Dmm];
 
-export interface PrescriptionProjection {
-  /** Where the prescription centre falls in this view, in millimetres. */
-  center: Point2Dmm;
-  /** Extent along the view's read (u) axis. */
-  widthMm: number;
-  /** Extent along the view's phase (v) axis. */
-  heightMm: number;
-  /** In-plane rotation of the rectangle within this view. */
-  rotationDeg: number;
-  /** Slice boundaries as seen here. Empty in the prescription's own plane. */
-  sliceLines: SliceLineMm[];
-  /** True when the slice group is viewed from the side rather than face on. */
-  isEdgeOn: boolean;
-  /** Signed distance from the view plane to the prescription centre. */
-  outOfPlaneOffsetMm: number;
+/**
+ * A prescription seen from a view plane.
+ *
+ * Orthographic projection is affine, so the rectangular slice group becomes a
+ * parallelogram. Half-axes and the normal step are reported so callers can
+ * translate the outline per slice without repeating the projection.
+ */
+export interface PrescriptionPlanarProjection {
+  readonly center: Point2Dmm;
+  readonly outline: PlanarQuadMm;
+  /** Half the read field of view, projected. */
+  readonly halfRead: Point2Dmm;
+  /** Half the phase field of view, projected. */
+  readonly halfPhase: Point2Dmm;
+  /** In-view travel per millimetre along the prescription normal. */
+  readonly normalStepMm: Point2Dmm;
+  /** |cos| of the angle between the prescription and view normals. */
+  readonly alignment: number;
+  readonly outOfPlaneOffsetMm: number;
+  readonly sliceOffsetsMm: readonly number[];
 }
 
 /** Centre-to-centre distance between neighbouring slices. */
@@ -71,90 +74,68 @@ export function viewExtentMm(
   return { uMm: along(view.readDirection), vMm: along(view.phaseDirection) };
 }
 
-/** Threshold separating a face-on view from an edge-on one. */
-const EDGE_ON_ALIGNMENT = 0.5;
+const add2 = (a: Point2Dmm, b: Point2Dmm): Point2Dmm => ({
+  uMm: a.uMm + b.uMm,
+  vMm: a.vMm + b.vMm,
+});
+const sub2 = (a: Point2Dmm, b: Point2Dmm): Point2Dmm => ({
+  uMm: a.uMm - b.uMm,
+  vMm: a.vMm - b.vMm,
+});
+
+/** Expresses a world direction in the view plane's millimetre basis. */
+function inViewBasis(direction: Vec3, view: PlaneOrientation): Point2Dmm {
+  return { uMm: dot(direction, view.readDirection), vMm: dot(direction, view.phaseDirection) };
+}
 
 /**
- * Describes how a prescription appears inside a given view plane.
+ * Projects a prescription orthographically into a view plane.
  *
- * Position is reported explicitly, so a renderer never has to assume the
- * prescription sits at the centre of the viewport.
+ * One formulation serves every relationship between the two planes:
+ * foreshortening falls out of the projected half-axes, and a perpendicular
+ * view simply collapses one of them toward zero.
  *
- * Slice boundaries are only visible edge-on: standing in the slice plane you
- * see one slice face, not the stack.
- *
- * Oblique relationships between the prescription and the view are classified by
- * the dominant alignment. That is exact for the axis-aligned cases this phase
- * produces; true oblique geometry arrives with 3D angulation.
+ * Corner order is fixed as (-read,-phase), (+read,-phase), (+read,+phase),
+ * (-read,+phase) so downstream consumers can rely on it.
  */
 export function projectToViewPlane(
   prescription: Prescription,
   view: PlaneOrientation,
   viewOrigin: VolumePosition
-): PrescriptionProjection {
-  const u = view.readDirection;
-  const v = view.phaseDirection;
+): PrescriptionPlanarProjection {
+  const p = prescription.orientation;
   const offset = subtract(prescription.center, viewOrigin);
 
-  const center: Point2Dmm = { uMm: dot(offset, u), vMm: dot(offset, v) };
+  const center: Point2Dmm = inViewBasis(offset, view);
   const outOfPlaneOffsetMm = dot(offset, view.normal);
 
-  const p = prescription.orientation;
-  const alignment = Math.abs(dot(p.normal, view.normal));
-  const isEdgeOn = alignment < EDGE_ON_ALIGNMENT;
+  const readAxis = inViewBasis(p.readDirection, view);
+  const phaseAxis = inViewBasis(p.phaseDirection, view);
 
-  if (!isEdgeOn) {
-    // Face on: the slice plane fills the view with its field of view.
-    const rotationDeg =
-      (Math.atan2(dot(p.readDirection, v), dot(p.readDirection, u)) * 180) / Math.PI;
-    return {
-      center,
-      widthMm: prescription.fovRead,
-      heightMm: prescription.fovPhase,
-      rotationDeg,
-      sliceLines: [],
-      isEdgeOn: false,
-      outOfPlaneOffsetMm,
-    };
-  }
+  const halfRead: Point2Dmm = {
+    uMm: (readAxis.uMm * prescription.fovRead) / 2,
+    vMm: (readAxis.vMm * prescription.fovRead) / 2,
+  };
+  const halfPhase: Point2Dmm = {
+    uMm: (phaseAxis.uMm * prescription.fovPhase) / 2,
+    vMm: (phaseAxis.vMm * prescription.fovPhase) / 2,
+  };
 
-  // Edge on: the slab's extent along each view axis is the sum of its three
-  // dimensions projected onto that axis.
-  const coverage = coverageMm(prescription);
-  const extentAlong = (axis: Vec3) =>
-    Math.abs(dot(p.readDirection, axis)) * prescription.fovRead +
-    Math.abs(dot(p.phaseDirection, axis)) * prescription.fovPhase +
-    Math.abs(dot(p.normal, axis)) * coverage;
-
-  const widthMm = extentAlong(u);
-  const heightMm = extentAlong(v);
-
-  const normalOnU = dot(p.normal, u);
-  const normalOnV = dot(p.normal, v);
-  const stacksVertically = Math.abs(normalOnV) >= Math.abs(normalOnU);
-
-  const sliceLines = sliceOffsetsMm(prescription).map((slice) => {
-    if (stacksVertically) {
-      const vMm = center.vMm + slice * normalOnV;
-      return {
-        start: { uMm: center.uMm - widthMm / 2, vMm },
-        end: { uMm: center.uMm + widthMm / 2, vMm },
-      };
-    }
-    const uMm = center.uMm + slice * normalOnU;
-    return {
-      start: { uMm, vMm: center.vMm - heightMm / 2 },
-      end: { uMm, vMm: center.vMm + heightMm / 2 },
-    };
-  });
+  const outline: PlanarQuadMm = [
+    sub2(sub2(center, halfRead), halfPhase),
+    sub2(add2(center, halfRead), halfPhase),
+    add2(add2(center, halfRead), halfPhase),
+    add2(sub2(center, halfRead), halfPhase),
+  ];
 
   return {
     center,
-    widthMm,
-    heightMm,
-    rotationDeg: 0,
-    sliceLines,
-    isEdgeOn: true,
+    outline,
+    halfRead,
+    halfPhase,
+    normalStepMm: inViewBasis(p.normal, view),
+    alignment: Math.abs(dot(p.normal, view.normal)),
     outOfPlaneOffsetMm,
+    sliceOffsetsMm: sliceOffsetsMm(prescription),
   };
 }

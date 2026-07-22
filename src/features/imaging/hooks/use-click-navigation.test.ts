@@ -56,7 +56,7 @@ const planningSession = toPlanningSession({
   bounds: SYNTHETIC_BOUNDS,
   centerX: 0.5,
   centerY: 0.5,
-  angulation: defaultParams.angulation,
+  orientation: defaultParams.orientation,
   fovRead: defaultParams.fovRead,
   fovPhase: defaultParams.fovPhase,
   sliceThickness: defaultParams.sliceThickness,
@@ -158,6 +158,7 @@ describe("click navigation inside a viewport", () => {
       session: planningSession,
       planningBounds: SYNTHETIC_BOUNDS,
       onVolumeGeometryChange: () => undefined,
+      onOrientationChange: () => undefined,
     });
   }
 

@@ -1,12 +1,15 @@
 import type { Prescription } from "@/features/planning/domain/prescription";
-import { coverageMm, projectToViewPlane } from "@/features/planning/domain/prescription-math";
-import { dot } from "@/features/planning/domain/vector";
+import {
+  projectToViewPlane,
+  type Point2Dmm,
+} from "@/features/planning/domain/prescription-math";
 import {
   EMPTY_PROJECTION,
+  classifyProjectionMode,
   freezeProjection,
-  type ProjectedSliceLine,
   type ProjectionResult,
 } from "@/features/imaging/projection/projection-model";
+import { isFiniteQuad, type ProjectedQuad } from "@/features/imaging/projection/quad";
 import {
   planeMmToViewportPx,
   type ViewportCamera,
@@ -15,59 +18,54 @@ import {
 /**
  * Second stage of the projection pipeline.
  *
- * The planning domain places a prescription into a plane in millimetres; this
- * turns that into viewport pixels, decides how the slice group meets the
- * camera, and freezes the result so a renderer can only paint it.
+ * The planning domain places a prescription into a view plane in millimetres;
+ * this turns that into viewport pixels and freezes the result so a renderer can
+ * only paint it. No mode-specific geometry: one projection serves face,
+ * oblique and edge-on alike.
  */
 export function projectPrescription(
   prescription: Prescription,
   camera: ViewportCamera
 ): ProjectionResult {
+  if (prescription.fovRead <= 0 || prescription.fovPhase <= 0) return EMPTY_PROJECTION;
+
   const planar = projectToViewPlane(prescription, camera.orientation, camera.origin);
 
-  const widthPx = planar.widthMm * camera.pxPerMmU;
-  const heightPx = planar.heightMm * camera.pxPerMmV;
-  const finite = [widthPx, heightPx, planar.center.uMm, planar.center.vMm].every((value) =>
-    Number.isFinite(value)
-  );
-  if (!finite || widthPx <= 0 || heightPx <= 0) return EMPTY_PROJECTION;
+  const translate = (point: Point2Dmm, offsetMm: number): Point2Dmm => ({
+    uMm: point.uMm + offsetMm * planar.normalStepMm.uMm,
+    vMm: point.vMm + offsetMm * planar.normalStepMm.vMm,
+  });
 
-  const center = planeMmToViewportPx(camera, planar.center);
-  // Screen y is inverted relative to the plane's v axis, so an in-plane
-  // rotation runs the other way on screen. Converted once, here.
-  const rotationRad = (-planar.rotationDeg * Math.PI) / 180;
+  const toQuad = (offsetMm: number): ProjectedQuad =>
+    [
+      planeMmToViewportPx(camera, translate(planar.outline[0], offsetMm)),
+      planeMmToViewportPx(camera, translate(planar.outline[1], offsetMm)),
+      planeMmToViewportPx(camera, translate(planar.outline[2], offsetMm)),
+      planeMmToViewportPx(camera, translate(planar.outline[3], offsetMm)),
+    ] as const;
 
-  const sliceLines: ProjectedSliceLine[] = planar.sliceLines.map((line) => ({
-    start: planeMmToViewportPx(camera, line.start),
-    end: planeMmToViewportPx(camera, line.end),
-  }));
+  const outline = toQuad(0);
+  if (!isFiniteQuad(outline)) return EMPTY_PROJECTION;
 
-  const shape = { center, widthPx, heightPx, rotationRad };
+  const sliceOutlines = planar.sliceOffsetsMm
+    .map((offsetMm) => toQuad(offsetMm))
+    .filter(isFiniteQuad);
 
-  if (!planar.isEdgeOn) {
-    return freezeProjection({
-      mode: "face",
-      rectangle: shape,
-      slab: null,
-      sliceLines,
-      outOfPlaneOffsetMm: planar.outOfPlaneOffsetMm,
-      isVisible: true,
-    });
+  // A direction, so it carries the screen's inverted vertical axis but not the
+  // viewport centre offset.
+  const normalStepPx = {
+    x: planar.normalStepMm.uMm * camera.pxPerMmU,
+    y: -planar.normalStepMm.vMm * camera.pxPerMmV,
+  };
+  if (!Number.isFinite(normalStepPx.x) || !Number.isFinite(normalStepPx.y)) {
+    return EMPTY_PROJECTION;
   }
 
-  // Seen from the side, the slab's depth runs along whichever screen axis
-  // carries the slice normal.
-  const normalOnU = dot(prescription.orientation.normal, camera.orientation.readDirection);
-  const normalOnV = dot(prescription.orientation.normal, camera.orientation.phaseDirection);
-  const stacksVertically = Math.abs(normalOnV) >= Math.abs(normalOnU);
-  const thicknessPx =
-    coverageMm(prescription) * (stacksVertically ? camera.pxPerMmV : camera.pxPerMmU);
-
   return freezeProjection({
-    mode: "edge",
-    rectangle: null,
-    slab: { ...shape, thicknessPx },
-    sliceLines,
+    mode: classifyProjectionMode(planar.alignment),
+    outline,
+    sliceOutlines,
+    normalStepPx,
     outOfPlaneOffsetMm: planar.outOfPlaneOffsetMm,
     isVisible: true,
   });

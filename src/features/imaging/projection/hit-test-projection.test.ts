@@ -3,161 +3,119 @@ import {
   EMPTY_PROJECTION,
   type ProjectionResult,
 } from "@/features/imaging/projection/projection-model";
+import type { ProjectedQuad } from "@/features/imaging/projection/quad";
 import {
   HANDLE_RADIUS_PX,
-  ROTATE_STALK_PX,
   hitTestProjection,
+  rotateKnobPosition,
 } from "@/features/imaging/projection/hit-test-projection";
 
-const CENTER = { x: 300, y: 300 };
-const WIDTH = 200;
-const HEIGHT = 120;
+const SQUARE: ProjectedQuad = [
+  { x: 200, y: 200 },
+  { x: 400, y: 200 },
+  { x: 400, y: 320 },
+  { x: 200, y: 320 },
+];
 
-function faceProjection(rotationRad = 0): ProjectionResult {
+/** Foreshortened outline, as an oblique prescription produces. */
+const OBLIQUE: ProjectedQuad = [
+  { x: 200, y: 200 },
+  { x: 380, y: 240 },
+  { x: 420, y: 340 },
+  { x: 240, y: 300 },
+];
+
+function projection(outline: ProjectedQuad | null = SQUARE): ProjectionResult {
   return {
     mode: "face",
-    rectangle: { center: CENTER, widthPx: WIDTH, heightPx: HEIGHT, rotationRad },
-    slab: null,
-    sliceLines: [],
+    outline,
+    sliceOutlines: [],
+    normalStepPx: { x: 0, y: 0 },
     outOfPlaneOffsetMm: 0,
     isVisible: true,
-  };
-}
-
-function edgeProjection(): ProjectionResult {
-  return {
-    mode: "edge",
-    rectangle: null,
-    slab: { center: CENTER, widthPx: WIDTH, heightPx: 40, rotationRad: 0, thicknessPx: 40 },
-    sliceLines: [],
-    outOfPlaneOffsetMm: 0,
-    isVisible: true,
-  };
-}
-
-/** Places a point in the shape's rotated frame, as the pointer would land. */
-function atLocal(localX: number, localY: number, rotationRad: number) {
-  const cos = Math.cos(rotationRad);
-  const sin = Math.sin(rotationRad);
-  return {
-    x: CENTER.x + localX * cos - localY * sin,
-    y: CENTER.y + localX * sin + localY * cos,
   };
 }
 
 describe("hitTestProjection regions", () => {
-  it("reports move at the prescription centre", () => {
-    expect(hitTestProjection(CENTER, faceProjection())).toBe("move");
-  });
-
-  it("reports move inside the drawn rectangle", () => {
-    expect(hitTestProjection({ x: 350, y: 320 }, faceProjection())).toBe("move");
+  it("reports move inside the drawn outline", () => {
+    expect(hitTestProjection({ x: 300, y: 260 }, projection())).toBe("move");
   });
 
   it("reports resize on every drawn corner", () => {
-    const corners = [
-      [-WIDTH / 2, -HEIGHT / 2],
-      [WIDTH / 2, -HEIGHT / 2],
-      [WIDTH / 2, HEIGHT / 2],
-      [-WIDTH / 2, HEIGHT / 2],
-    ] as const;
-    for (const [x, y] of corners) {
-      expect(hitTestProjection(atLocal(x, y, 0), faceProjection())).toBe("resize");
+    for (const corner of SQUARE) {
+      expect(hitTestProjection(corner, projection())).toBe("resize");
     }
   });
 
-  it("reports rotate on the stalk knob", () => {
-    const point = atLocal(0, -HEIGHT / 2 - ROTATE_STALK_PX, 0);
-    expect(hitTestProjection(point, faceProjection())).toBe("rotate");
+  it("reports rotate on the knob", () => {
+    const knob = rotateKnobPosition(SQUARE)!;
+    expect(hitTestProjection(knob, projection())).toBe("rotate");
   });
 
-  it("reports nothing outside the prescription", () => {
-    expect(hitTestProjection({ x: 10, y: 10 }, faceProjection())).toBeNull();
-    expect(hitTestProjection({ x: 599, y: 599 }, faceProjection())).toBeNull();
-  });
-
-  it("prefers the rotate knob over the rectangle body", () => {
-    // The knob sits outside the rectangle, so it can only be the rotate handle.
-    const point = atLocal(0, -HEIGHT / 2 - ROTATE_STALK_PX, 0);
-    expect(hitTestProjection(point, faceProjection())).not.toBe("move");
+  it("reports nothing outside", () => {
+    expect(hitTestProjection({ x: 10, y: 10 }, projection())).toBeNull();
+    expect(hitTestProjection({ x: 300, y: 500 }, projection())).toBeNull();
   });
 });
 
-describe("hitTestProjection follows the drawn rotation", () => {
-  const rotation = -Math.PI / 4;
-
-  it("finds corners after rotation", () => {
-    const point = atLocal(WIDTH / 2, HEIGHT / 2, rotation);
-    expect(hitTestProjection(point, faceProjection(rotation))).toBe("resize");
+describe("hitTestProjection follows oblique geometry", () => {
+  it("finds move inside a foreshortened outline", () => {
+    expect(hitTestProjection({ x: 310, y: 270 }, projection(OBLIQUE))).toBe("move");
   });
 
-  it("finds the rotate knob after rotation", () => {
-    const point = atLocal(0, -HEIGHT / 2 - ROTATE_STALK_PX, rotation);
-    expect(hitTestProjection(point, faceProjection(rotation))).toBe("rotate");
+  it("finds every projected corner of a foreshortened outline", () => {
+    for (const corner of OBLIQUE) {
+      expect(hitTestProjection(corner, projection(OBLIQUE))).toBe("resize");
+    }
   });
 
-  it("no longer reports the unrotated corner position", () => {
-    const unrotatedCorner = { x: CENTER.x + WIDTH / 2, y: CENTER.y + HEIGHT / 2 };
-    expect(hitTestProjection(unrotatedCorner, faceProjection(rotation))).not.toBe("resize");
+  it("moves the knob with the outline", () => {
+    const knob = rotateKnobPosition(OBLIQUE)!;
+    expect(hitTestProjection(knob, projection(OBLIQUE))).toBe("rotate");
+    // The upright knob position is no longer the handle once the outline tilts.
+    expect(hitTestProjection(rotateKnobPosition(SQUARE)!, projection(OBLIQUE))).not.toBe("rotate");
   });
 
-  it("still reports move at the centre of a rotated shape", () => {
-    expect(hitTestProjection(CENTER, faceProjection(rotation))).toBe("move");
-  });
-});
-
-describe("hitTestProjection edge-on slab", () => {
-  it("tests against the slab when there is no rectangle", () => {
-    expect(hitTestProjection(CENTER, edgeProjection())).toBe("move");
-  });
-
-  it("uses the slab's own corners", () => {
-    const point = { x: CENTER.x + WIDTH / 2, y: CENTER.y + 20 };
-    expect(hitTestProjection(point, edgeProjection())).toBe("resize");
-  });
-});
-
-describe("hitTestProjection boundaries and options", () => {
-  it("treats the handle radius as exclusive", () => {
-    const justInside = atLocal(WIDTH / 2, -HEIGHT / 2 + HANDLE_RADIUS_PX - 0.01, 0);
-    expect(hitTestProjection(justInside, faceProjection())).toBe("resize");
-  });
-
-  it("misses a corner beyond the handle radius", () => {
-    const outside = atLocal(WIDTH / 2 + HANDLE_RADIUS_PX + 5, -HEIGHT / 2 - HANDLE_RADIUS_PX - 5, 0);
-    expect(hitTestProjection(outside, faceProjection())).toBeNull();
-  });
-
-  it("accepts a custom handle radius", () => {
-    const point = atLocal(WIDTH / 2 - 20, HEIGHT / 2 - 20, 0);
-    expect(hitTestProjection(point, faceProjection())).toBe("move");
-    expect(hitTestProjection(point, faceProjection(), { handleRadiusPx: 40 })).toBe("resize");
-  });
-
-  it("accepts a custom rotate stalk length", () => {
-    const point = atLocal(0, -HEIGHT / 2 - 60, 0);
-    expect(hitTestProjection(point, faceProjection())).toBeNull();
-    expect(hitTestProjection(point, faceProjection(), { rotateStalkPx: 60 })).toBe("rotate");
+  it("rejects a point the upright outline covered but the tilted one does not", () => {
+    const point = { x: 250, y: 210 };
+    expect(hitTestProjection(point, projection(SQUARE))).toBe("move");
+    expect(hitTestProjection(point, projection(OBLIQUE))).toBeNull();
   });
 });
 
 describe("hitTestProjection guards", () => {
   it("reports nothing for an invisible projection", () => {
-    expect(hitTestProjection(CENTER, EMPTY_PROJECTION)).toBeNull();
+    expect(hitTestProjection({ x: 300, y: 260 }, EMPTY_PROJECTION)).toBeNull();
   });
 
-  it("reports nothing when there is no shape", () => {
-    const shapeless: ProjectionResult = { ...faceProjection(), rectangle: null };
-    expect(hitTestProjection(CENTER, shapeless)).toBeNull();
+  it("reports nothing without an outline", () => {
+    expect(hitTestProjection({ x: 300, y: 260 }, projection(null))).toBeNull();
   });
 
   it("reports nothing for a non-finite pointer", () => {
-    expect(hitTestProjection({ x: Number.NaN, y: 300 }, faceProjection())).toBeNull();
+    expect(hitTestProjection({ x: Number.NaN, y: 260 }, projection())).toBeNull();
   });
 
-  it("does not mutate the projection it inspects", () => {
-    const projection = Object.freeze(faceProjection());
-    expect(() => hitTestProjection(CENTER, projection)).not.toThrow();
-    expect(projection.rectangle!.center).toEqual(CENTER);
+  it("stays safe for an edge-on collapsed outline", () => {
+    const collapsed: ProjectedQuad = [
+      { x: 200, y: 260 },
+      { x: 400, y: 260 },
+      { x: 400, y: 260 },
+      { x: 200, y: 260 },
+    ];
+    expect(hitTestProjection({ x: 300, y: 260 }, projection(collapsed))).not.toBe("move");
+    expect(() => hitTestProjection({ x: 300, y: 260 }, projection(collapsed))).not.toThrow();
+  });
+
+  it("accepts a custom handle radius", () => {
+    const nearCorner = { x: 200 + HANDLE_RADIUS_PX + 5, y: 200 + HANDLE_RADIUS_PX + 5 };
+    expect(hitTestProjection(nearCorner, projection())).toBe("move");
+    expect(hitTestProjection(nearCorner, projection(), { handleRadiusPx: 40 })).toBe("resize");
+  });
+
+  it("does not mutate a frozen projection", () => {
+    const frozen = Object.freeze(projection());
+    expect(() => hitTestProjection({ x: 300, y: 260 }, frozen)).not.toThrow();
+    expect(frozen.outline![0]).toEqual({ x: 200, y: 200 });
   });
 });

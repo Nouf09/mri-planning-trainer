@@ -1,3 +1,5 @@
+import type { PrescriptionOrientationInput } from "@/features/planning/domain/prescription-orientation";
+
 export interface ScanParams {
   fovRead: number;
   fovPhase: number;
@@ -8,6 +10,8 @@ export interface ScanParams {
   tr: number;
   te: number;
   flipAngle: number;
+  /** World-mode prescription orientation. Legacy planning uses `angulation`. */
+  orientation: PrescriptionOrientationInput;
 }
 
 export interface PlanningState {
