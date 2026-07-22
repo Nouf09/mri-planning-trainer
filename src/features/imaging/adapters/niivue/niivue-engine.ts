@@ -168,6 +168,21 @@ export function createNiivueEngine(): VolumeImagingEngine {
       instance.moveCrosshairInVox(x, y, z);
     },
 
+    navigateToScreenPoint(clientX: number, clientY: number): void {
+      if (!instance || !attachedCanvas) return;
+
+      // Replay the click on the engine's own canvas rather than converting the
+      // coordinate here. Niivue then applies its own device pixel ratio, canvas
+      // bounds and tile selection, and reports the move through
+      // onLocationChange like any other click.
+      //
+      // The pair matters: a lone mousedown would leave the engine believing a
+      // button is still held.
+      const shared = { clientX, clientY, bubbles: false, cancelable: true, button: 0 };
+      attachedCanvas.dispatchEvent(new MouseEvent("mousedown", { ...shared, buttons: 1 }));
+      attachedCanvas.dispatchEvent(new MouseEvent("mouseup", { ...shared, buttons: 0 }));
+    },
+
     dispose(): void {
       generation++;
       const canvas = attachedCanvas;

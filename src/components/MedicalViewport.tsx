@@ -6,6 +6,7 @@ import { useImagingEngine } from "@/features/imaging/hooks/use-imaging-engine";
 import { useVolumeEngine } from "@/features/imaging/hooks/use-volume-engine";
 import { useVolumeSync } from "@/features/imaging/hooks/use-volume-sync";
 import { useSliceNavigation } from "@/features/imaging/hooks/use-slice-navigation";
+import { useClickNavigation } from "@/features/imaging/hooks/use-click-navigation";
 import { DEFAULT_VOLUME_SOURCE } from "@/features/imaging/data/volume-source";
 import type { VolumePosition } from "@/features/imaging/domain/volume-position";
 
@@ -56,6 +57,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   });
   // The overlay canvas owns pointer input, so it forwards wheel navigation.
   useSliceNavigation({ engine, status: volume.status, plane, targetRef: canvasRef });
+  const navigateToScreenPoint = useClickNavigation({ engine, status: volume.status });
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -104,7 +106,11 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
 
   const onMouseDown = (e: React.MouseEvent) => {
     const mode = hitTest(e);
-    if (!mode) return;
+    if (!mode) {
+      // Planning handles keep priority; only clicks that miss them navigate.
+      navigateToScreenPoint(e.clientX, e.clientY);
+      return;
+    }
     e.preventDefault();
     const pos = getCanvasPos(e);
     dragStart.current = { x: pos.x, y: pos.y, cx: planning.centerX, cy: planning.centerY, fovR: params.fovRead, fovP: params.fovPhase, ang: params.angulation };

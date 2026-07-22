@@ -33,6 +33,17 @@ export interface VolumeImagingEngine extends ImagingEngine {
    * position listener like any other interaction.
    */
   stepSlice(plane: AnatomicalPlane, steps: number): void;
+  /**
+   * Navigate to the point under a screen coordinate.
+   *
+   * Coordinates are passed through untouched: converting screen space to
+   * voxel, fractional or world coordinates is the engine's responsibility,
+   * along with device pixel ratio, canvas bounds and tile selection.
+   *
+   * This is user-driven navigation, so the resulting move is reported to the
+   * position listener like any other interaction.
+   */
+  navigateToScreenPoint(clientX: number, clientY: number): void;
 }
 
 export function isVolumeImagingEngine(engine: ImagingEngine): engine is VolumeImagingEngine {

@@ -421,3 +421,105 @@ describe("niivue engine slice stepping", () => {
     expect(drawScene).not.toHaveBeenCalled();
   });
 });
+
+describe("niivue engine click navigation", () => {
+  it("does nothing before a volume is mounted", () => {
+    const engine = createNiivueEngine();
+    const canvas = makeCanvas();
+    const seen: string[] = [];
+    canvas.addEventListener("mousedown", () => seen.push("mousedown"));
+    canvas.addEventListener("mouseup", () => seen.push("mouseup"));
+
+    expect(() => engine.navigateToScreenPoint(10, 20)).not.toThrow();
+    expect(seen).toEqual([]);
+  });
+
+  it("dispatches a paired mousedown and mouseup to the engine canvas", async () => {
+    const engine = createNiivueEngine();
+    const canvas = makeCanvas();
+    await engine.mount(canvas, "axial");
+
+    const seen: string[] = [];
+    canvas.addEventListener("mousedown", () => seen.push("mousedown"));
+    canvas.addEventListener("mouseup", () => seen.push("mouseup"));
+
+    engine.navigateToScreenPoint(120, 240);
+
+    expect(seen).toEqual(["mousedown", "mouseup"]);
+  });
+
+  it("preserves the client coordinates exactly", async () => {
+    const engine = createNiivueEngine();
+    const canvas = makeCanvas();
+    await engine.mount(canvas, "axial");
+
+    const points: Array<[number, number]> = [];
+    const record = (event: Event) => {
+      const mouse = event as MouseEvent;
+      points.push([mouse.clientX, mouse.clientY]);
+    };
+    canvas.addEventListener("mousedown", record);
+    canvas.addEventListener("mouseup", record);
+
+    engine.navigateToScreenPoint(137, 411);
+
+    expect(points).toEqual([
+      [137, 411],
+      [137, 411],
+    ]);
+  });
+
+  it("does not leave a button held after the click", async () => {
+    const engine = createNiivueEngine();
+    const canvas = makeCanvas();
+    await engine.mount(canvas, "axial");
+
+    const buttons: number[] = [];
+    canvas.addEventListener("mousedown", (e) => buttons.push((e as MouseEvent).buttons));
+    canvas.addEventListener("mouseup", (e) => buttons.push((e as MouseEvent).buttons));
+
+    engine.navigateToScreenPoint(5, 5);
+
+    expect(buttons).toEqual([1, 0]);
+  });
+
+  it("stops dispatching after disposal", async () => {
+    const engine = createNiivueEngine();
+    const canvas = makeCanvas();
+    await engine.mount(canvas, "axial");
+    engine.dispose();
+
+    const seen: string[] = [];
+    canvas.addEventListener("mousedown", () => seen.push("mousedown"));
+
+    engine.navigateToScreenPoint(1, 1);
+
+    expect(seen).toEqual([]);
+  });
+
+  it("publishes a forwarded click exactly once", async () => {
+    const { engine, instance } = await mountedEngine("axial");
+    const listener = vi.fn();
+    engine.setPositionListener(listener);
+
+    engine.navigateToScreenPoint(60, 60);
+    // Niivue reports the crosshair move the click produced.
+    instance.onLocationChange({ mm: [8, 9, 10] });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ x: 8, y: 9, z: 10 });
+  });
+
+  it("never republishes when the shared position returns to it", async () => {
+    const { engine, instance } = await mountedEngine("axial");
+    const listener = vi.fn();
+    engine.setPositionListener(listener);
+
+    engine.navigateToScreenPoint(60, 60);
+    instance.onLocationChange({ mm: [8, 9, 10] });
+    engine.setPosition({ x: 8, y: 9, z: 10 });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(drawScene).not.toHaveBeenCalled();
+  });
+});
