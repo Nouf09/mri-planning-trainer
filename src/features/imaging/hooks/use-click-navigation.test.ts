@@ -37,6 +37,29 @@ vi.mock("@niivue/niivue", () => ({
 import { MedicalViewport } from "@/components/MedicalViewport";
 import { useVolumePosition } from "@/features/imaging/hooks/use-volume-position";
 import { defaultParams } from "@/features/planning/state/planning.initial-state";
+import { toPlanningSession } from "@/features/planning/domain/planning-session";
+import { BRAIN_SYNTHETIC_WORLD } from "@/features/imaging/data/brain-synthetic-world";
+import {
+  DEFAULT_SEQUENCE_ID,
+  EDUCATIONAL_PATIENT,
+  EDUCATIONAL_STUDY,
+} from "@/features/planning/data/educational-session";
+
+const planningSession = toPlanningSession({
+  patient: EDUCATIONAL_PATIENT,
+  study: EDUCATIONAL_STUDY,
+  sequenceId: DEFAULT_SEQUENCE_ID,
+  protocolName: "T1 MPRAGE",
+  world: BRAIN_SYNTHETIC_WORLD,
+  centerX: 0.5,
+  centerY: 0.5,
+  angulation: defaultParams.angulation,
+  fovRead: defaultParams.fovRead,
+  fovPhase: defaultParams.fovPhase,
+  sliceThickness: defaultParams.sliceThickness,
+  sliceGap: defaultParams.sliceGap,
+  sliceCount: defaultParams.sliceCount,
+});
 
 const jpgEngine: ImagingEngine = {
   kind: "jpg",
@@ -129,6 +152,7 @@ describe("click navigation inside a viewport", () => {
       onParamChange: () => undefined,
       volumePosition: position,
       onVolumePositionChange: publishPosition,
+      session: planningSession,
     });
   }
 

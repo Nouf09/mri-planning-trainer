@@ -10,6 +10,7 @@ const Index = () => {
   const {
     params,
     planning,
+    session,
     autoAdjustSliceCount,
     selectedProtocol,
     selectedCaseId,
@@ -61,6 +62,7 @@ const Index = () => {
               onParamChange={updateParam}
               volumePosition={volumePosition}
               onVolumePositionChange={publishPosition}
+              session={session}
             />
           ))}
         </main>

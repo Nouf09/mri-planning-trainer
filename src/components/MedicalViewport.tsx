@@ -9,6 +9,15 @@ import { useSliceNavigation } from "@/features/imaging/hooks/use-slice-navigatio
 import { useClickNavigation } from "@/features/imaging/hooks/use-click-navigation";
 import { DEFAULT_VOLUME_SOURCE } from "@/features/imaging/data/volume-source";
 import type { VolumePosition } from "@/features/imaging/domain/volume-position";
+import {
+  resolveEffectivePlanningMode,
+  resolvePlanningMode,
+} from "@/features/imaging/data/imaging-config";
+import { BRAIN_SYNTHETIC_WORLD } from "@/features/imaging/data/brain-synthetic-world";
+import { createPrescriptionOverlayRenderer } from "@/features/imaging/overlays/prescription-overlay-renderer";
+import { VIEW_ORIENTATION_BY_PLANE } from "@/features/planning/domain/orientation";
+import { projectToViewPlane, viewExtentMm } from "@/features/planning/domain/prescription-math";
+import { activeSequence, type PlanningSession } from "@/features/planning/domain/planning-session";
 
 const planeLabelStyles: Record<AnatomicalPlane, string> = {
   sagittal: "text-console-warn",
@@ -25,11 +34,14 @@ interface ViewportProps {
   onParamChange: (key: keyof ScanParams, value: number) => void;
   volumePosition: VolumePosition | null;
   onVolumePositionChange: (position: VolumePosition) => void;
+  session: PlanningSession;
 }
+
+const prescriptionOverlay = createPrescriptionOverlayRenderer();
 
 type DragMode = "move" | "resize" | "rotate" | null;
 
-export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange }: ViewportProps) {
+export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session }: ViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
@@ -59,6 +71,12 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   useSliceNavigation({ engine, status: volume.status, plane, targetRef: canvasRef });
   const navigateToScreenPoint = useClickNavigation({ engine, status: volume.status });
 
+  const planningMode = resolveEffectivePlanningMode(resolvePlanningMode(), engine.kind);
+  // Legacy hit-test geometry only matches the world rendering in the planning
+  // plane, so prescription editing is limited to it. Perpendicular views render
+  // the slab read-only rather than exposing handles that are not drawn.
+  const isPrescriptionEditable = planningMode === "legacy" || plane === "axial";
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -73,6 +91,21 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    if (planningMode === "world") {
+      const sequence = activeSequence(session);
+      if (!sequence) return;
+      const view = VIEW_ORIENTATION_BY_PLANE[plane];
+      const extent = viewExtentMm(BRAIN_SYNTHETIC_WORLD, view);
+      prescriptionOverlay.render(
+        ctx,
+        { width: w, height: h },
+        plane,
+        projectToViewPlane(sequence.prescription, view, BRAIN_SYNTHETIC_WORLD.center),
+        { pxPerMmU: w / extent.uMm, pxPerMmV: h / extent.vMm }
+      );
+      return;
+    }
+
     overlay.render(ctx, { width: w, height: h }, plane, {
       centerX: planning.centerX,
       centerY: planning.centerY,
@@ -83,7 +116,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
       sliceThickness: params.sliceThickness,
       sliceGap: params.sliceGap,
     });
-  }, [params, planning, plane, overlay]);
+  }, [params, planning, plane, overlay, planningMode, session]);
 
   useEffect(() => {
     draw();
@@ -98,6 +131,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   };
 
   const hitTest = (e: React.MouseEvent): DragMode => {
+    if (!isPrescriptionEditable) return null;
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const pos = getCanvasPos(e);
