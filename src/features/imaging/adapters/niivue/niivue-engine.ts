@@ -7,10 +7,13 @@ import {
 } from "@/features/imaging/domain/volume-position";
 import { voxelDeltaForPlane } from "@/features/imaging/domain/slice-navigation";
 import type { VolumeGeometry } from "@/features/imaging/domain/volume-geometry";
+import { readVolumeGeometry } from "@/features/imaging/adapters/niivue/read-volume-geometry";
 import {
-  readVolumeGeometry,
-  type VolumeSpatialSource,
-} from "@/features/imaging/adapters/niivue/read-volume-geometry";
+  buildVolumeSamplerCapability,
+  type NiivueVolumeImageLike,
+  type VolumeSamplerCapability,
+  type VolumeSamplerProvider,
+} from "@/features/imaging/adapters/niivue/volume-sampler-capability";
 
 /**
  * Minimal surface this adapter uses. Declared locally so Niivue types never
@@ -27,7 +30,7 @@ interface NiivueLike {
   frac2mm(frac: [number, number, number]): ArrayLike<number>;
   scene: { crosshairPos: ArrayLike<number> };
   onLocationChange: (location: unknown) => void;
-  volumes?: VolumeSpatialSource[];
+  volumes?: NiivueVolumeImageLike[];
 }
 
 /** The subset of Niivue's location payload this adapter consumes. */
@@ -52,10 +55,12 @@ function toPosition(mm: ArrayLike<number>): VolumePosition {
  * invalidates in-flight async work instead of a permanent disposed flag, so a
  * dispose/mount cycle (React Strict Mode) re-attaches correctly.
  */
-export function createNiivueEngine(): VolumeImagingEngine {
+export function createNiivueEngine(): VolumeImagingEngine & VolumeSamplerProvider {
   let instance: NiivueLike | null = null;
   let attachedCanvas: HTMLCanvasElement | null = null;
   let generation = 0;
+  // Stable identity of the loaded source, for stale-result invalidation.
+  let loadedVolumeId: string | null = null;
 
   // Echo guards. `applying` blocks synchronous re-entry while a position is
   // being written; `lastKnown` additionally rejects asynchronous echoes, which
@@ -131,6 +136,7 @@ export function createNiivueEngine(): VolumeImagingEngine {
       await instance.loadVolumes([{ url: source.url }]);
       // Swallow results that arrive after teardown.
       if (loadGeneration !== generation) return;
+      loadedVolumeId = source.url;
     },
 
     setPosition(position: VolumePosition): void {
@@ -179,6 +185,12 @@ export function createNiivueEngine(): VolumeImagingEngine {
       return readVolumeGeometry(instance.volumes?.[0]);
     },
 
+    getVolumeSamplerCapability(): VolumeSamplerCapability | null {
+      const image = instance?.volumes?.[0];
+      if (!image || !loadedVolumeId) return null;
+      return buildVolumeSamplerCapability(loadedVolumeId, image);
+    },
+
     navigateToScreenPoint(clientX: number, clientY: number): void {
       if (!instance || !attachedCanvas) return;
 
@@ -210,6 +222,7 @@ export function createNiivueEngine(): VolumeImagingEngine {
       positionListener = null;
       lastKnown = null;
       applying = false;
+      loadedVolumeId = null;
       releaseContext(canvas);
     },
   };

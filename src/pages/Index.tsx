@@ -4,6 +4,10 @@ import { ParametersPanel } from "@/components/ParametersPanel";
 import { ClinicalCasePanel } from "@/components/ClinicalCasePanel";
 import { Activity } from "lucide-react";
 import { useMemo, useState } from "react";
+import { ObliquePreviewViewport } from "@/features/imaging/components/ObliquePreviewViewport";
+import { useObliquePreview } from "@/features/imaging/reslice/runtime/use-oblique-preview";
+import { activeSequence } from "@/features/planning/domain/planning-session";
+import type { ImagingRuntimeCapabilities } from "@/features/imaging/adapters/niivue/volume-sampler-capability";
 import { usePlanningSession } from "@/features/planning/hooks/use-planning-session";
 import { useVolumePosition } from "@/features/imaging/hooks/use-volume-position";
 import {
@@ -24,6 +28,7 @@ const Index = () => {
   // The image source decides which physical extent planning works against.
   const engineKind = resolveImagingEngineKind();
   const [volumeGeometry, setVolumeGeometry] = useState<VolumeGeometry | null>(null);
+  const [imagingCapabilities, setImagingCapabilities] = useState<ImagingRuntimeCapabilities | null>(null);
   const planningBounds = useMemo(
     () => resolvePlanningBounds(engineKind, volumeGeometry, SYNTHETIC_BRAIN_BOUNDS),
     [engineKind, volumeGeometry]
@@ -52,6 +57,14 @@ const Index = () => {
 
   const { position: volumePosition, publishPosition } = useVolumePosition();
 
+  const previewState = useObliquePreview({
+    engineKind,
+    planningMode,
+    prescription: activeSequence(session)?.prescription ?? null,
+    capabilities: imagingCapabilities,
+  });
+  const previewVisible = previewState.status !== "hidden";
+
   return (
     <div className="h-screen flex flex-col bg-console-dark overflow-hidden">
       <header className="h-10 flex items-center justify-between px-4 border-b border-border bg-console-panel flex-shrink-0">
@@ -79,7 +92,7 @@ const Index = () => {
       <ClinicalCasePanel selectedCaseId={selectedCaseId} onSelectCase={selectCase} />
       <div className="flex-1 flex min-h-0">
         <ProtocolSidebar selected={selectedProtocol} onSelect={selectProtocol} />
-        <main className="flex-1 grid grid-cols-3 gap-1 p-1 min-h-0 bg-console-dark">
+        <main className={`flex-1 grid ${previewVisible ? "grid-cols-4" : "grid-cols-3"} gap-1 p-1 min-h-0 bg-console-dark`}>
           {(["sagittal", "coronal", "axial"] as const).map((plane) => (
             <MedicalViewport
               key={plane}
@@ -95,8 +108,10 @@ const Index = () => {
               planningBounds={planningBounds}
               onVolumeGeometryChange={setVolumeGeometry}
               onOrientationChange={updateOrientation}
+              onImagingCapabilitiesChange={plane === "axial" ? setImagingCapabilities : undefined}
             />
           ))}
+          <ObliquePreviewViewport state={previewState} />
         </main>
         <ParametersPanel
           params={params}

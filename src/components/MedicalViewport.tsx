@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import type { ScanParams, PlanningState } from "@/features/planning/domain/planning.types";
 import type { AnatomicalPlane } from "@/features/imaging/domain/viewport.types";
 import type { PlanningGeometry } from "@/features/imaging/domain/overlay.types";
@@ -22,6 +22,10 @@ import { createFittedCamera } from "@/features/imaging/projection/viewport-camer
 import { projectPrescription } from "@/features/imaging/projection/project-prescription";
 import { hitTestProjection } from "@/features/imaging/projection/hit-test-projection";
 import type { PrescriptionOrientationInput } from "@/features/planning/domain/prescription-orientation";
+import {
+  isVolumeSamplerProvider,
+  type ImagingRuntimeCapabilities,
+} from "@/features/imaging/adapters/niivue/volume-sampler-capability";
 import type { ProjectionResult } from "@/features/imaging/projection/projection-model";
 
 const planeLabelStyles: Record<AnatomicalPlane, string> = {
@@ -44,13 +48,15 @@ interface ViewportProps {
   planningBounds: WorldBounds | null;
   onVolumeGeometryChange: (geometry: VolumeGeometry | null) => void;
   onOrientationChange: (patch: Partial<PrescriptionOrientationInput>) => void;
+  /** Set by the axial viewport only, to surface the runtime sampling source. */
+  onImagingCapabilitiesChange?: (capabilities: ImagingRuntimeCapabilities | null) => void;
 }
 
 const prescriptionOverlay = createPrescriptionOverlayRenderer();
 
 type DragMode = "move" | "resize" | "rotate" | null;
 
-export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session, planningBounds, onVolumeGeometryChange, onOrientationChange }: ViewportProps) {
+export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session, planningBounds, onVolumeGeometryChange, onOrientationChange, onImagingCapabilitiesChange }: ViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
@@ -84,6 +90,23 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
   useEffect(() => {
     onVolumeGeometryChange(volumeGeometry);
   }, [volumeGeometry, onVolumeGeometryChange]);
+
+  // Axial is the sole runtime sampling owner, so only it surfaces capabilities.
+  // NVImage never crosses this boundary; only pure project types are emitted.
+  const imagingCapabilities = useMemo<ImagingRuntimeCapabilities | null>(() => {
+    if (plane !== "axial") return null;
+    if (volume.status !== "ready" || !volumeGeometry) return null;
+    const volumeSampler = isVolumeSamplerProvider(engine)
+      ? engine.getVolumeSamplerCapability()
+      : null;
+    return { volumeIdentity: DEFAULT_VOLUME_SOURCE.url, geometry: volumeGeometry, volumeSampler };
+  }, [plane, engine, volume.status, volumeGeometry]);
+
+  useEffect(() => {
+    onImagingCapabilitiesChange?.(imagingCapabilities);
+  }, [imagingCapabilities, onImagingCapabilitiesChange]);
+
+  useEffect(() => () => onImagingCapabilitiesChange?.(null), [onImagingCapabilitiesChange]);
 
   const planningMode = resolveEffectivePlanningMode(
     resolvePlanningMode(),
