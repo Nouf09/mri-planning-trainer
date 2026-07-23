@@ -109,6 +109,7 @@ const Index = () => {
               onVolumeGeometryChange={setVolumeGeometry}
               onOrientationChange={updateOrientation}
               onImagingCapabilitiesChange={plane === "axial" ? setImagingCapabilities : undefined}
+              highlightedSliceIndex={previewState.status === "ready" ? previewState.selectedIndex : null}
             />
           ))}
           <ObliqueStackViewport state={previewState} onSelectSlice={selectSlice} />

@@ -14,6 +14,7 @@ import {
   resolvePlanningMode,
 } from "@/features/imaging/data/imaging-config";
 import { createPrescriptionOverlayRenderer } from "@/features/imaging/overlays/prescription-overlay-renderer";
+import { createReferenceLineRenderer } from "@/features/imaging/overlays/reference-line-renderer";
 import { useVolumeGeometry } from "@/features/imaging/hooks/use-volume-geometry";
 import type { VolumeGeometry, WorldBounds } from "@/features/imaging/domain/volume-geometry";
 import { VIEW_ORIENTATION_BY_PLANE } from "@/features/planning/domain/orientation";
@@ -50,13 +51,16 @@ interface ViewportProps {
   onOrientationChange: (patch: Partial<PrescriptionOrientationInput>) => void;
   /** Set by the axial viewport only, to surface the runtime sampling source. */
   onImagingCapabilitiesChange?: (capabilities: ImagingRuntimeCapabilities | null) => void;
+  /** Selected stack slice to mark with a read-only reference line; null draws none. */
+  highlightedSliceIndex?: number | null;
 }
 
 const prescriptionOverlay = createPrescriptionOverlayRenderer();
+const referenceLine = createReferenceLineRenderer();
 
 type DragMode = "move" | "resize" | "rotate" | null;
 
-export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session, planningBounds, onVolumeGeometryChange, onOrientationChange, onImagingCapabilitiesChange }: ViewportProps) {
+export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session, planningBounds, onVolumeGeometryChange, onOrientationChange, onImagingCapabilitiesChange, highlightedSliceIndex }: ViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
@@ -153,6 +157,11 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
       prescriptionOverlay.render(ctx, { width: w, height: h }, plane, projection, {
         showHandles: isPrescriptionEditable,
       });
+      // Read-only reference line for the selected stack slice, drawn from the
+      // same projection so no geometry, reslice, or hit-test region is added.
+      if (highlightedSliceIndex != null) {
+        referenceLine.render(ctx, projection.sliceOutlines[highlightedSliceIndex]);
+      }
       return;
     }
 
@@ -166,7 +175,7 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
       sliceThickness: params.sliceThickness,
       sliceGap: params.sliceGap,
     });
-  }, [params, planning, plane, overlay, planningMode, projectFor, isPrescriptionEditable]);
+  }, [params, planning, plane, overlay, planningMode, projectFor, isPrescriptionEditable, highlightedSliceIndex]);
 
   useEffect(() => {
     draw();
