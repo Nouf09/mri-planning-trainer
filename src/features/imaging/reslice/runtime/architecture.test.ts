@@ -32,9 +32,12 @@ describe("preview runtime stays framework-clean", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("the pure runtime layer imports no React except the hook", () => {
-    const reactImporters = runtimeFiles.filter((f) => /from "react"/.test(readFileSync(f, "utf8")));
-    expect(reactImporters.map((f) => f.split("/").pop())).toEqual(["use-oblique-preview.ts"]);
+  it("the pure runtime layer imports React only in the orchestration hooks", () => {
+    const reactImporters = runtimeFiles
+      .filter((f) => /from "react"/.test(readFileSync(f, "utf8")))
+      .map((f) => f.split("/").pop())
+      .sort();
+    expect(reactImporters).toEqual(["use-oblique-preview.ts", "use-oblique-stack.ts"]);
   });
 
   it("the painter performs no reslice, mapping, or affine work", () => {

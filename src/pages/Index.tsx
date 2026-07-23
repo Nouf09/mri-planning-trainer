@@ -4,8 +4,8 @@ import { ParametersPanel } from "@/components/ParametersPanel";
 import { ClinicalCasePanel } from "@/components/ClinicalCasePanel";
 import { Activity } from "lucide-react";
 import { useMemo, useState } from "react";
-import { ObliquePreviewViewport } from "@/features/imaging/components/ObliquePreviewViewport";
-import { useObliquePreview } from "@/features/imaging/reslice/runtime/use-oblique-preview";
+import { ObliqueStackViewport } from "@/features/imaging/components/ObliqueStackViewport";
+import { useObliqueStack } from "@/features/imaging/reslice/runtime/use-oblique-stack";
 import { activeSequence } from "@/features/planning/domain/planning-session";
 import type { ImagingRuntimeCapabilities } from "@/features/imaging/adapters/niivue/volume-sampler-capability";
 import { usePlanningSession } from "@/features/planning/hooks/use-planning-session";
@@ -57,7 +57,7 @@ const Index = () => {
 
   const { position: volumePosition, publishPosition } = useVolumePosition();
 
-  const previewState = useObliquePreview({
+  const { state: previewState, selectSlice } = useObliqueStack({
     engineKind,
     planningMode,
     prescription: activeSequence(session)?.prescription ?? null,
@@ -111,7 +111,7 @@ const Index = () => {
               onImagingCapabilitiesChange={plane === "axial" ? setImagingCapabilities : undefined}
             />
           ))}
-          <ObliquePreviewViewport state={previewState} />
+          <ObliqueStackViewport state={previewState} onSelectSlice={selectSlice} />
         </main>
         <ParametersPanel
           params={params}

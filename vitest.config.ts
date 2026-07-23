@@ -9,6 +9,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // Real headless NVImage integration tests are CPU-heavy; a higher timeout
+    // keeps fast unit tests from failing when starved under parallel load.
+    testTimeout: 20000,
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
