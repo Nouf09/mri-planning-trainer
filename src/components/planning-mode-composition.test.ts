@@ -43,6 +43,14 @@ describe("planning mode is resolved once at the composition root", () => {
     expect(/engineKind=\{engineKind\}/.test(src)).toBe(true);
   });
 
+  it("useImagingEngine requires an injected kind and never resolves the URL itself", () => {
+    const src = read("src/features/imaging/hooks/use-imaging-engine.ts");
+    expect(/resolveImagingEngineKind/.test(src)).toBe(false);
+    // Required parameter: a typed kind with neither a default nor an optional marker.
+    expect(/useImagingEngine\(\s*kind:\s*ImagingEngineKind\s*\)/.test(src)).toBe(true);
+    expect(/kind\?\s*:|kind:\s*ImagingEngineKind\s*=/.test(src)).toBe(false);
+  });
+
   it("no other composition-layer file recomputes the effective planning mode", () => {
     const files = [...productionFiles("src/components"), ...productionFiles("src/pages")];
     const offenders = files

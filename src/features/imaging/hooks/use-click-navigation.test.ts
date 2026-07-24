@@ -149,6 +149,8 @@ describe("click navigation inside a viewport", () => {
     return createElement(MedicalViewport, {
       label: "axial",
       plane: "axial",
+      engineKind: "niivue",
+      planningMode: "legacy",
       params: defaultParams,
       planning: { centerX: 0.5, centerY: 0.5 },
       onPlanningChange: () => undefined,
