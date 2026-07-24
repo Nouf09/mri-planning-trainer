@@ -98,6 +98,8 @@ const Index = () => {
               key={plane}
               label={plane.charAt(0).toUpperCase() + plane.slice(1)}
               plane={plane}
+              engineKind={engineKind}
+              planningMode={planningMode}
               params={params}
               planning={planning}
               onPlanningChange={updatePlanning}

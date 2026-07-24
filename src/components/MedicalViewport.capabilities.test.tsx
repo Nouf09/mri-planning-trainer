@@ -59,7 +59,8 @@ function renderViewport(plane: AnatomicalPlane, onCaps: (c: ImagingRuntimeCapabi
   function Harness() {
     const { position, publishPosition } = useVolumePosition();
     return createElement(MedicalViewport, {
-      label: plane, plane, params: defaultParams, planning: { centerX: 0.5, centerY: 0.5 },
+      label: plane, plane, engineKind: "niivue", planningMode: "world",
+      params: defaultParams, planning: { centerX: 0.5, centerY: 0.5 },
       onPlanningChange: () => undefined, onParamChange: () => undefined,
       volumePosition: position, onVolumePositionChange: publishPosition, session,
       planningBounds: BOUNDS, onVolumeGeometryChange: () => undefined, onOrientationChange: () => undefined,

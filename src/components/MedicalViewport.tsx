@@ -9,10 +9,8 @@ import { useSliceNavigation } from "@/features/imaging/hooks/use-slice-navigatio
 import { useClickNavigation } from "@/features/imaging/hooks/use-click-navigation";
 import { DEFAULT_VOLUME_SOURCE } from "@/features/imaging/data/volume-source";
 import type { VolumePosition } from "@/features/imaging/domain/volume-position";
-import {
-  resolveEffectivePlanningMode,
-  resolvePlanningMode,
-} from "@/features/imaging/data/imaging-config";
+import type { PlanningMode } from "@/features/imaging/data/imaging-config";
+import type { ImagingEngineKind } from "@/features/imaging/domain/imaging-engine";
 import { createPrescriptionOverlayRenderer } from "@/features/imaging/overlays/prescription-overlay-renderer";
 import { createReferenceLineRenderer } from "@/features/imaging/overlays/reference-line-renderer";
 import { useVolumeGeometry } from "@/features/imaging/hooks/use-volume-geometry";
@@ -38,6 +36,10 @@ const planeLabelStyles: Record<AnatomicalPlane, string> = {
 interface ViewportProps {
   label: string;
   plane: AnatomicalPlane;
+  /** Resolved once at the composition root; viewports never re-read the URL. */
+  engineKind: ImagingEngineKind;
+  /** Effective planning mode, resolved once alongside engineKind. */
+  planningMode: PlanningMode;
   params: ScanParams;
   planning: PlanningState;
   onPlanningChange: (s: Partial<PlanningState>) => void;
@@ -60,12 +62,12 @@ const referenceLine = createReferenceLineRenderer();
 
 type DragMode = "move" | "resize" | "rotate" | null;
 
-export function MedicalViewport({ label, plane, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session, planningBounds, onVolumeGeometryChange, onOrientationChange, onImagingCapabilitiesChange, highlightedSliceIndex }: ViewportProps) {
+export function MedicalViewport({ label, plane, engineKind, planningMode, params, planning, onPlanningChange, onParamChange, volumePosition, onVolumePositionChange, session, planningBounds, onVolumeGeometryChange, onOrientationChange, onImagingCapabilitiesChange, highlightedSliceIndex }: ViewportProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragMode, setDragMode] = useState<DragMode>(null);
   const dragStart = useRef({ x: 0, y: 0, cx: 0, cy: 0, fovR: 0, fovP: 0, ang: 0, inPlane: 0 });
-  const { engine, overlay } = useImagingEngine();
+  const { engine, overlay } = useImagingEngine(engineKind);
 
   const geometry: PlanningGeometry = {
     centerX: planning.centerX,
@@ -112,11 +114,6 @@ export function MedicalViewport({ label, plane, params, planning, onPlanningChan
 
   useEffect(() => () => onImagingCapabilitiesChange?.(null), [onImagingCapabilitiesChange]);
 
-  const planningMode = resolveEffectivePlanningMode(
-    resolvePlanningMode(),
-    engine.kind,
-    planningBounds !== null
-  );
   // Legacy hit-test geometry only matches the world rendering in the planning
   // plane, so prescription editing is limited to it. Perpendicular views render
   // the slab read-only rather than exposing handles that are not drawn.
