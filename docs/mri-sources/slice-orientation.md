@@ -1,14 +1,31 @@
 # Slice orientation, offsets, and anatomical direction
 
-Recorded 2026-07-25 (Phase 11B). Classification rules are described in
+Recorded 2026-07-25 (Phases 11B and 11C). Classification rules are described in
 [README.md](README.md).
 
 ## Why this file exists
 
 The stack preview labels the selected slice with a signed millimetre offset and
-the anatomical axes a positive offset advances along. Both statements are claims
-about the patient, so the reasoning behind them is written down rather than
-inferred from the code later.
+an anatomical reading of where that slice sits. Both statements are claims about
+the patient, so the reasoning behind them is written down rather than inferred
+from the code later.
+
+## Two different statements, deliberately kept apart
+
+These were conflated in the first version of the header, which read a negative
+offset as though it were positive. They are now separate:
+
+**A. Direction of increasing offset — a property of the prescription.**
+`directionFromNormal(normal)` names the axes the normal points along. It is the
+same for every slice in a stack, and it is what the stack runtime publishes as
+`offsetDirection`. Phase 11B defined it and Phase 11C left it untouched.
+
+**B. Signed anatomical position — a property of the selected slice.**
+`positionForOffset(direction, offsetMm)` names where one slice sits relative to
+the prescription centre. A positive offset reads as A; a negative offset reads as
+A's per-axis opposite, in the same component order; a zero offset is the centre
+itself. This is what the header shows, derived during render — no runtime state,
+cache, or descriptor carries it.
 
 ## Claims
 
@@ -32,6 +49,23 @@ inferred from the code later.
 | 16 | Label format: `Slice N / M · ±X.X mm · S-R`, letters strongest first, with the words in the element's title | Product decision | Phase 11B | Approved before implementation |
 | 17 | Equal components keep a stable x, y, z order rather than an arbitrary one | Product decision | Phase 11B, following claim 5 | Covered by a test |
 | 18 | Sagittal and coronal *prescriptions* do not exist; `CORONAL` and `SAGITTAL` are viewport cameras only | Authoritative fact about our code | `orientation.ts`, `MedicalViewport.tsx` | Searched every usage |
+| 19 | A slice centre is `prescriptionCentre + normal · offsetMm`, so a negative offset is a displacement along `−normal`: the same axes read the other way, with magnitudes and therefore component order unchanged | Authoritative fact about our code | `selected-slice-position.ts`, `prescription-to-reslice-request.ts` | Asserted as a property test: `directionFromNormal(−n)` equals `oppositeDirection(directionFromNormal(n))` for cardinal, two-axis and three-axis normals |
+| 20 | Opposed anatomical directions are inverted per letter, preserving letter order: `R-S-P` becomes `L-I-A`, never `A-I-L` | Implementation convention | [Cornerstone3D `invertOrientationStringLPS.ts`](https://github.com/cornerstonejs/cornerstone3D/blob/main/packages/tools/src/utilities/orientation/invertOrientationStringLPS.ts) (MIT) | Read the source as a reference only; see the adaptation note below |
+| 21 | A zero offset is the prescription centre, and negative zero resolves there with no special case, since `-0 === 0` and `-0 > 0` is false | Authoritative fact (language semantics) | ECMAScript equality and relational comparison | Asserted directly in tests |
+| 22 | Centre is detected as exactly zero, with no tolerance | Product decision | Phase 11C | Justified by claim 23 |
+| 23 | An odd-count stack produces an exactly zero centre offset in floating point, and the smallest reachable non-zero offset is 0.25 mm, which never displays as `0.0 mm` | Authoritative fact about our code | `prescription-math.ts`; `ParametersPanel.tsx` ranges (`sliceThickness` min 0.5, `sliceGap` min 0) | Swept odd counts across thickness/gap combinations: every centre offset was exactly 0; minimum even-count offset was 0.25 mm |
+| 24 | Wording: the centre reads `Centre`; elsewhere the header shows axis letters, with the words in the element's title as "Selected slice is … of the prescription centre" | Product decision | Phase 11C | Approved before implementation; British spelling matches `centreSliceIndex` and "Planned centre slice" already in the codebase |
+
+## Reference reading, and what was not copied
+
+Cornerstone3D's `invertOrientationStringLPS` (MIT, confirmed via the GitHub API)
+was read as a reference for claim 20. Its code was **not** adapted. It works in
+LPS with `H`/`F` for head and foot, where this codebase is RAS with `S`/`I`; it
+chains `String.replace` calls through a lowercase intermediate; and it passes
+unmapped characters through unchanged. `oppositeDirection` is independently
+written: it derives the opposed pairs from the axis data already used to name a
+direction, so the pairs are stated once, and it returns null for any letter this
+module did not produce rather than treating it as anatomical.
 
 ## Standing assumptions and their expiry conditions
 
@@ -66,15 +100,29 @@ is the main reason the direction is computed from the normal at runtime.
 > `MAX_ORIENTATION_ANGLE_DEG` grows beyond 90°, at which point a positive offset
 > could point inferior and claim 13 must be re-derived.
 
+**D. Centre means exactly zero.** `positionForOffset` compares `offsetMm === 0`
+with no tolerance, which is safe because of claim 23: an odd stack's centre
+offset cancels to exact zero, and the smallest non-zero offset any reachable
+parameter combination can produce is 0.25 mm. So the word `Centre` and the
+number `0.0 mm` can never contradict each other.
+
+> **Expires if** `sliceThickness`'s minimum drops below 0.1 mm, or slice offsets
+> stop being derived by exact arithmetic about the centre. Either would let a
+> non-zero offset display as `0.0 mm`, at which point centre detection must move
+> to the same rounding the readout uses rather than gaining a hidden epsilon.
+
 ## Where this is implemented
 
 - `src/features/imaging/domain/anatomical-direction.ts` — the pure mapping from a
-  world direction to ordered anatomical letters. No React, no Niivue, no
-  planning imports.
+  world direction to ordered anatomical letters (`directionFromNormal`, statement
+  A), plus the opposed reading and the signed position for one slice
+  (`oppositeDirection`, `positionForOffset`, statement B). No React, no Niivue,
+  no planning imports, and no imports at all.
 - `src/features/imaging/reslice/runtime/use-oblique-stack.ts` — reads the
   prescription normal once per descriptor and publishes the direction.
 - `src/features/imaging/components/ObliqueStackViewport.tsx` — presentation only:
-  formatting and the spelled-out title.
+  it derives the signed position during render, formats the millimetres, and
+  spells the position out in the title.
 
 ## Unresolved
 

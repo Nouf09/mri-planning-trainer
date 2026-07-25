@@ -44,6 +44,28 @@ const AXES = [
   { toward: { code: "S", word: "Superior" }, away: { code: "I", word: "Inferior" } },
 ] as const;
 
+/** Between axis letters in a code. */
+export const AXIS_SEPARATOR = "-";
+/** Between axis words in a description. */
+const DESCRIPTION_SEPARATOR = ", then ";
+
+interface LetterEntry {
+  readonly word: string;
+  readonly opposite: string;
+}
+
+/**
+ * Each letter's word and its opposed letter, derived from AXES above so the
+ * opposed pairs are never stated twice. An axis already carries both of its
+ * ends, so R/L, A/P and S/I need no second declaration.
+ */
+const BY_LETTER: ReadonlyMap<string, LetterEntry> = new Map(
+  AXES.flatMap((axis): Array<[string, LetterEntry]> => [
+    [axis.toward.code, { word: axis.toward.word, opposite: axis.away.code }],
+    [axis.away.code, { word: axis.away.word, opposite: axis.toward.code }],
+  ])
+);
+
 /**
  * Names the anatomical axes a direction travels along, strongest first.
  *
@@ -72,7 +94,74 @@ export function directionFromNormal(normal: DirectionVector): AnatomicalDirectio
   );
 
   return {
-    code: parts.map((part) => part.code).join("-"),
-    description: parts.map((part) => part.word).join(", then "),
+    code: parts.map((part) => part.code).join(AXIS_SEPARATOR),
+    description: parts.map((part) => part.word).join(DESCRIPTION_SEPARATOR),
   };
+}
+
+/**
+ * The same axes read the other way along each one.
+ *
+ * Every letter becomes the opposite end of its own axis, in place, so a
+ * compound direction keeps its component order: R-S-P reads as L-I-A, never as
+ * P-S-R. Returns null for a code this module did not produce, rather than
+ * passing an unknown letter through as though it were anatomical.
+ */
+export function oppositeDirection(direction: AnatomicalDirection): AnatomicalDirection | null {
+  const codes: string[] = [];
+  const words: string[] = [];
+
+  for (const letter of direction.code.split(AXIS_SEPARATOR)) {
+    const entry = BY_LETTER.get(letter);
+    if (!entry) return null;
+    const opposite = BY_LETTER.get(entry.opposite);
+    if (!opposite) return null;
+    codes.push(entry.opposite);
+    words.push(opposite.word);
+  }
+
+  return {
+    code: codes.join(AXIS_SEPARATOR),
+    description: words.join(DESCRIPTION_SEPARATOR),
+  };
+}
+
+/**
+ * Where a slice sits relative to the prescription centre.
+ *
+ * Distinct from the direction of increasing offset: that describes the
+ * prescription, while this describes one selected slice. A slice exactly at the
+ * centre has a position but no direction, so it is its own case rather than an
+ * axis reading.
+ */
+export type AnatomicalPosition =
+  | { readonly kind: "centre" }
+  | { readonly kind: "offset"; readonly code: string; readonly description: string };
+
+const CENTRE: AnatomicalPosition = Object.freeze({ kind: "centre" as const });
+
+/**
+ * Reads a signed offset along a direction as an anatomical position.
+ *
+ * The slice centre is `prescriptionCentre + normal * offsetMm`, so a negative
+ * offset is a displacement along the opposite of the normal: the same axes read
+ * the other way, in the same order. A zero offset is the centre itself, which
+ * also settles negative zero without a case of its own, since -0 === 0 and
+ * -0 > 0 is false.
+ *
+ * Returns null when no position can be named: a non-finite offset, or an offset
+ * away from the centre along a direction that names no axis.
+ */
+export function positionForOffset(
+  direction: AnatomicalDirection | null,
+  offsetMm: number
+): AnatomicalPosition | null {
+  if (!Number.isFinite(offsetMm)) return null;
+  if (offsetMm === 0) return CENTRE;
+  if (!direction) return null;
+
+  const reading = offsetMm > 0 ? direction : oppositeDirection(direction);
+  if (!reading) return null;
+
+  return { kind: "offset", code: reading.code, description: reading.description };
 }

@@ -35,19 +35,19 @@ describe("ObliqueStackViewport display", () => {
     expect(getByText("Slice 8 / 15 · +12.5 mm · S")).toBeTruthy(); // 1-based numbering, signed offset
   });
 
-  it("shows 0.0 mm for the centre slice, without a sign", () => {
+  it("shows 0.0 mm and Centre for the centre slice", () => {
     const { getByText } = render(createElement(ObliqueStackViewport, { state: ready(7, 15, 0), onSelectSlice: vi.fn() }));
-    expect(getByText("Slice 8 / 15 · 0.0 mm · S")).toBeTruthy();
+    expect(getByText("Slice 8 / 15 · 0.0 mm · Centre")).toBeTruthy();
   });
 
   it("normalizes a negative-zero offset to 0.0 mm", () => {
     const { getByText } = render(createElement(ObliqueStackViewport, { state: ready(7, 15, -0), onSelectSlice: vi.fn() }));
-    expect(getByText("Slice 8 / 15 · 0.0 mm · S")).toBeTruthy();
+    expect(getByText("Slice 8 / 15 · 0.0 mm · Centre")).toBeTruthy();
   });
 
-  it("keeps the minus sign for a negative offset, to one decimal", () => {
+  it("keeps the minus sign for a negative offset, and reads the opposite axis", () => {
     const { getByText } = render(createElement(ObliqueStackViewport, { state: ready(0, 15, -17.5), onSelectSlice: vi.fn() }));
-    expect(getByText("Slice 1 / 15 · -17.5 mm · S")).toBeTruthy();
+    expect(getByText("Slice 1 / 15 · -17.5 mm · I")).toBeTruthy();
   });
 
   it("shows the title and paints when ready", () => {
@@ -78,7 +78,31 @@ describe("ObliqueStackViewport display", () => {
       state: ready(9, 15, 5, { code: "S-R", description: "Superior, then Right" }),
       onSelectSlice: vi.fn(),
     }));
-    expect(getByTitle("Increasing offset moves Superior, then Right")).toBeTruthy();
+    expect(getByTitle("Selected slice is Superior, then Right of the prescription centre")).toBeTruthy();
+  });
+
+  it("reads a compound direction the other way for a negative offset", () => {
+    const { getByText } = render(createElement(ObliqueStackViewport, {
+      state: ready(2, 15, -3, { code: "R-S-P", description: "Right, then Superior, then Posterior" }),
+      onSelectSlice: vi.fn(),
+    }));
+    expect(getByText("Slice 3 / 15 · -3.0 mm · L-I-A")).toBeTruthy();
+  });
+
+  it("spells the centre out for the reader", () => {
+    const { getByTitle } = render(createElement(ObliqueStackViewport, {
+      state: ready(7, 15, 0),
+      onSelectSlice: vi.fn(),
+    }));
+    expect(getByTitle("Selected slice is at the prescription centre")).toBeTruthy();
+  });
+
+  it("still reports the centre when the normal names no axis", () => {
+    const { getByText } = render(createElement(ObliqueStackViewport, {
+      state: ready(7, 15, 0, null),
+      onSelectSlice: vi.fn(),
+    }));
+    expect(getByText("Slice 8 / 15 · 0.0 mm · Centre")).toBeTruthy();
   });
 
   it("omits the direction when the normal names none", () => {

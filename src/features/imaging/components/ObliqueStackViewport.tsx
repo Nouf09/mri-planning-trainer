@@ -4,6 +4,10 @@ import {
   clearObliquePreview,
   paintObliquePreview,
 } from "@/features/imaging/components/oblique-preview-painter";
+import {
+  positionForOffset,
+  type AnatomicalPosition,
+} from "@/features/imaging/domain/anatomical-direction";
 
 interface ObliqueStackViewportProps {
   state: ObliqueStackState;
@@ -15,6 +19,18 @@ function formatOffsetMm(offsetMm: number): string {
   const text = offsetMm.toFixed(1);
   if (text === "0.0" || text === "-0.0") return "0.0 mm";
   return offsetMm > 0 ? `+${text} mm` : `${text} mm`;
+}
+
+/** The centre reads as a word; anywhere else reads as its axis letters. */
+function positionLabel(position: AnatomicalPosition): string {
+  return position.kind === "centre" ? "Centre" : position.code;
+}
+
+function positionTitle(position: AnatomicalPosition | null): string | undefined {
+  if (!position) return undefined;
+  return position.kind === "centre"
+    ? "Selected slice is at the prescription centre"
+    : `Selected slice is ${position.description} of the prescription centre`;
 }
 
 /**
@@ -39,7 +55,9 @@ export function ObliqueStackViewport({ state, onSelectSlice }: ObliqueStackViewp
   const selectedIndex = ready ? state.selectedIndex : 0;
   const sliceCount = ready ? state.sliceCount : 0;
   const offsetMm = ready ? state.offsetMm : 0;
-  const direction = ready ? state.offsetDirection : null;
+  // The stack publishes the direction of increasing offset; the signed reading
+  // for the selected slice is presentation, so no runtime state carries it.
+  const position = ready ? positionForOffset(state.offsetDirection, offsetMm) : null;
 
   // Native, non-passive wheel listener so preventDefault stops page scroll, and
   // strictly scoped to this panel.
@@ -89,11 +107,11 @@ export function ObliqueStackViewport({ state, onSelectSlice }: ObliqueStackViewp
         </span>
         <span
           className="text-[9px] font-mono text-muted-foreground"
-          title={direction ? `Increasing offset moves ${direction.description}` : undefined}
+          title={positionTitle(position)}
         >
           {ready
             ? `Slice ${selectedIndex + 1} / ${sliceCount} · ${formatOffsetMm(offsetMm)}${
-                direction ? ` · ${direction.code}` : ""
+                position ? ` · ${positionLabel(position)}` : ""
               }`
             : "Planned centre slice"}
         </span>
