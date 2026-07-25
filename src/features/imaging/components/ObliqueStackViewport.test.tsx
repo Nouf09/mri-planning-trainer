@@ -12,8 +12,8 @@ beforeAll(() => {
   Object.defineProperty(HTMLCanvasElement.prototype, "getContext", { configurable: true, value: () => ({ imageSmoothingEnabled: true, clearRect: vi.fn(), putImageData }) });
 });
 
-function ready(selectedIndex = 7, sliceCount = 15): ObliqueStackState {
-  return { status: "ready", sliceCount, selectedIndex, fromCache: false, image: { width: 2, height: 2, gray: Uint8ClampedArray.from([0, 64, 128, 255]), alpha: Uint8Array.from([255, 255, 255, 255]) } };
+function ready(selectedIndex = 7, sliceCount = 15, offsetMm = 12.5): ObliqueStackState {
+  return { status: "ready", sliceCount, selectedIndex, offsetMm, fromCache: false, image: { width: 2, height: 2, gray: Uint8ClampedArray.from([0, 64, 128, 255]), alpha: Uint8Array.from([255, 255, 255, 255]) } };
 }
 
 describe("ObliqueStackViewport display", () => {
@@ -22,9 +22,24 @@ describe("ObliqueStackViewport display", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("shows the slice indicator", () => {
+  it("shows the slice indicator with its physical offset", () => {
     const { getByText } = render(createElement(ObliqueStackViewport, { state: ready(7, 15), onSelectSlice: vi.fn() }));
-    expect(getByText("Slice 8 / 15")).toBeTruthy(); // 1-based
+    expect(getByText("Slice 8 / 15 · +12.5 mm")).toBeTruthy(); // 1-based numbering, signed offset
+  });
+
+  it("shows 0.0 mm for the centre slice, without a sign", () => {
+    const { getByText } = render(createElement(ObliqueStackViewport, { state: ready(7, 15, 0), onSelectSlice: vi.fn() }));
+    expect(getByText("Slice 8 / 15 · 0.0 mm")).toBeTruthy();
+  });
+
+  it("normalizes a negative-zero offset to 0.0 mm", () => {
+    const { getByText } = render(createElement(ObliqueStackViewport, { state: ready(7, 15, -0), onSelectSlice: vi.fn() }));
+    expect(getByText("Slice 8 / 15 · 0.0 mm")).toBeTruthy();
+  });
+
+  it("keeps the minus sign for a negative offset, to one decimal", () => {
+    const { getByText } = render(createElement(ObliqueStackViewport, { state: ready(0, 15, -17.5), onSelectSlice: vi.fn() }));
+    expect(getByText("Slice 1 / 15 · -17.5 mm")).toBeTruthy();
   });
 
   it("shows the title and paints when ready", () => {

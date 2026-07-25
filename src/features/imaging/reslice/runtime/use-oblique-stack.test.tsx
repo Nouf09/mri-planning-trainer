@@ -57,6 +57,22 @@ describe("stack ready + default selection", () => {
     expect(result.current.state.sliceCount).toBe(5);
     expect(result.current.state.selectedIndex).toBe(2); // floor(5/2)
   });
+
+  it("reports the centre slice at offset 0 mm", () => {
+    const { result } = mount({ prescription, caps: CAPS });
+    // thickness 3 + gap 1 -> spacing 4 -> offsets [-8, -4, 0, 4, 8]
+    expect((result.current.state as { offsetMm: number }).offsetMm).toBe(0);
+  });
+
+  it("updates the offset from the descriptor when the selection changes", () => {
+    const { result } = mount({ prescription, caps: CAPS });
+    act(() => result.current.selectSlice(4));
+    expect((result.current.state as { offsetMm: number }).offsetMm).toBe(8);
+    act(() => result.current.selectSlice(0));
+    expect((result.current.state as { offsetMm: number }).offsetMm).toBe(-8);
+    act(() => result.current.selectSlice(0)); // cached revisit keeps the offset
+    expect((result.current.state as { offsetMm: number }).offsetMm).toBe(-8);
+  });
 });
 
 describe("navigation changes only the index", () => {

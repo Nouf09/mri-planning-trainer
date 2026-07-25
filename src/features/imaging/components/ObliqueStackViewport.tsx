@@ -10,6 +10,13 @@ interface ObliqueStackViewportProps {
   onSelectSlice: (index: number) => void;
 }
 
+/** Scanner-console style position readout: explicit sign, one decimal, 0.0 at centre. */
+function formatOffsetMm(offsetMm: number): string {
+  const text = offsetMm.toFixed(1);
+  if (text === "0.0" || text === "-0.0") return "0.0 mm";
+  return offsetMm > 0 ? `+${text} mm` : `${text} mm`;
+}
+
 /**
  * A read-only fourth viewport that browses the planned acquisition stack.
  *
@@ -31,6 +38,7 @@ export function ObliqueStackViewport({ state, onSelectSlice }: ObliqueStackViewp
   const ready = state.status === "ready";
   const selectedIndex = ready ? state.selectedIndex : 0;
   const sliceCount = ready ? state.sliceCount : 0;
+  const offsetMm = ready ? state.offsetMm : 0;
 
   // Native, non-passive wheel listener so preventDefault stops page scroll, and
   // strictly scoped to this panel.
@@ -79,7 +87,9 @@ export function ObliqueStackViewport({ state, onSelectSlice }: ObliqueStackViewp
           Oblique Preview
         </span>
         <span className="text-[9px] font-mono text-muted-foreground">
-          {ready ? `Slice ${selectedIndex + 1} / ${sliceCount}` : "Planned centre slice"}
+          {ready
+            ? `Slice ${selectedIndex + 1} / ${sliceCount} · ${formatOffsetMm(offsetMm)}`
+            : "Planned centre slice"}
         </span>
       </div>
 

@@ -105,7 +105,7 @@ export function useObliqueStack(input: UseObliqueStackInput): ObliqueStack {
     const cached = cache?.identity === activeDescriptor.identity ? cache.images.get(index) : undefined;
     if (cached) {
       scheduler.cancel();
-      setState({ status: "ready", sliceCount: count, selectedIndex: index, image: cached, fromCache: true });
+      setState({ status: "ready", sliceCount: count, selectedIndex: index, offsetMm: activeDescriptor.offsetsMm[index], image: cached, fromCache: true });
       return;
     }
 
@@ -119,7 +119,7 @@ export function useObliqueStack(input: UseObliqueStackInput): ObliqueStack {
         if (cacheRef.current?.identity === activeDescriptor.identity) {
           cacheRef.current.images.set(index, result.image);
         }
-        setState({ status: "ready", sliceCount: count, selectedIndex: index, image: result.image, fromCache: false });
+        setState({ status: "ready", sliceCount: count, selectedIndex: index, offsetMm: activeDescriptor.offsetsMm[index], image: result.image, fromCache: false });
       }
     );
 

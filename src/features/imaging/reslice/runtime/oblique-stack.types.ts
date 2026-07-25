@@ -44,6 +44,8 @@ export type ObliqueStackState =
       readonly status: "ready";
       readonly sliceCount: number;
       readonly selectedIndex: number;
+      /** Signed distance of the selected slice centre from the prescription centre. */
+      readonly offsetMm: number;
       readonly image: ObliquePreviewImage;
       /** True when served from cache rather than freshly resliced. Test aid. */
       readonly fromCache: boolean;
