@@ -39,6 +39,7 @@ export function ObliqueStackViewport({ state, onSelectSlice }: ObliqueStackViewp
   const selectedIndex = ready ? state.selectedIndex : 0;
   const sliceCount = ready ? state.sliceCount : 0;
   const offsetMm = ready ? state.offsetMm : 0;
+  const direction = ready ? state.offsetDirection : null;
 
   // Native, non-passive wheel listener so preventDefault stops page scroll, and
   // strictly scoped to this panel.
@@ -86,9 +87,14 @@ export function ObliqueStackViewport({ state, onSelectSlice }: ObliqueStackViewp
         <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-primary">
           Oblique Preview
         </span>
-        <span className="text-[9px] font-mono text-muted-foreground">
+        <span
+          className="text-[9px] font-mono text-muted-foreground"
+          title={direction ? `Increasing offset moves ${direction.description}` : undefined}
+        >
           {ready
-            ? `Slice ${selectedIndex + 1} / ${sliceCount} · ${formatOffsetMm(offsetMm)}`
+            ? `Slice ${selectedIndex + 1} / ${sliceCount} · ${formatOffsetMm(offsetMm)}${
+                direction ? ` · ${direction.code}` : ""
+              }`
             : "Planned centre slice"}
         </span>
       </div>

@@ -9,6 +9,7 @@ import {
   centreSliceIndex,
   renderStackSlice,
 } from "@/features/imaging/reslice/runtime/build-oblique-stack";
+import { directionFromNormal } from "@/features/imaging/domain/anatomical-direction";
 import type { ObliqueStackState } from "@/features/imaging/reslice/runtime/oblique-stack.types";
 import {
   createPreviewScheduler,
@@ -100,12 +101,14 @@ export function useObliqueStack(input: UseObliqueStackInput): ObliqueStack {
     const activeDescriptor = descriptorResult.descriptor;
     const count = activeDescriptor.offsetsMm.length;
     const index = clamp(selectedIndex, count);
+    // One reading per descriptor: the normal is fixed for the whole stack.
+    const offsetDirection = directionFromNormal(activeDescriptor.prescription.orientation.normal);
 
     const cache = cacheRef.current;
     const cached = cache?.identity === activeDescriptor.identity ? cache.images.get(index) : undefined;
     if (cached) {
       scheduler.cancel();
-      setState({ status: "ready", sliceCount: count, selectedIndex: index, offsetMm: activeDescriptor.offsetsMm[index], image: cached, fromCache: true });
+      setState({ status: "ready", sliceCount: count, selectedIndex: index, offsetMm: activeDescriptor.offsetsMm[index], offsetDirection, image: cached, fromCache: true });
       return;
     }
 
@@ -119,7 +122,7 @@ export function useObliqueStack(input: UseObliqueStackInput): ObliqueStack {
         if (cacheRef.current?.identity === activeDescriptor.identity) {
           cacheRef.current.images.set(index, result.image);
         }
-        setState({ status: "ready", sliceCount: count, selectedIndex: index, offsetMm: activeDescriptor.offsetsMm[index], image: result.image, fromCache: false });
+        setState({ status: "ready", sliceCount: count, selectedIndex: index, offsetMm: activeDescriptor.offsetsMm[index], offsetDirection, image: result.image, fromCache: false });
       }
     );
 

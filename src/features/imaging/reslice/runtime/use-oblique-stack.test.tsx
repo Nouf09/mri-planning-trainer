@@ -64,6 +64,23 @@ describe("stack ready + default selection", () => {
     expect((result.current.state as { offsetMm: number }).offsetMm).toBe(0);
   });
 
+  it("names the anatomical direction a positive offset advances along", () => {
+    const { result } = mount({ prescription, caps: CAPS });
+    // The AXIAL normal is +z, which is superior in the RAS-ordered world space.
+    expect((result.current.state as { offsetDirection: { code: string } }).offsetDirection).toEqual({
+      code: "S",
+      description: "Superior",
+    });
+  });
+
+  it("keeps the direction while browsing, since the normal is fixed per stack", () => {
+    const { result } = mount({ prescription, caps: CAPS });
+    act(() => result.current.selectSlice(0));
+    const first = (result.current.state as { offsetDirection: unknown }).offsetDirection;
+    act(() => result.current.selectSlice(4));
+    expect((result.current.state as { offsetDirection: unknown }).offsetDirection).toEqual(first);
+  });
+
   it("updates the offset from the descriptor when the selection changes", () => {
     const { result } = mount({ prescription, caps: CAPS });
     act(() => result.current.selectSlice(4));

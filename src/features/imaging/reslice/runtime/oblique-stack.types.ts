@@ -2,6 +2,7 @@ import type { Prescription } from "@/features/planning/domain/prescription";
 import type { VolumeSampler } from "@/features/imaging/reslice/volume-sampler";
 import type { IntensityWindow } from "@/features/imaging/adapters/niivue/volume-sampler-capability";
 import type { ObliquePreviewImage } from "@/features/imaging/reslice/runtime/oblique-preview.types";
+import type { AnatomicalDirection } from "@/features/imaging/domain/anatomical-direction";
 
 /**
  * Everything needed to render any slice of one acquisition stack.
@@ -46,6 +47,11 @@ export type ObliqueStackState =
       readonly selectedIndex: number;
       /** Signed distance of the selected slice centre from the prescription centre. */
       readonly offsetMm: number;
+      /**
+       * Anatomical axes a positive offset advances along, or null when the
+       * prescription normal names none.
+       */
+      readonly offsetDirection: AnatomicalDirection | null;
       readonly image: ObliquePreviewImage;
       /** True when served from cache rather than freshly resliced. Test aid. */
       readonly fromCache: boolean;
