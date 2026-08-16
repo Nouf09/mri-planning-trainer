@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import type { WorldBounds } from "@/features/imaging/domain/volume-geometry";
+import { DEFAULT_CASE_ID } from "@/features/training-cases/data/training-cases";
 import {
   clampOrientationInput,
   type PrescriptionOrientationInput,
@@ -21,7 +22,9 @@ export function usePlanningSession(planningBounds: WorldBounds) {
 
   const [selectedProtocol, setSelectedProtocol] = useState("T1 MPRAGE");
 
-  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  // Seeded from the catalogue rather than a repeated literal, so the default
+  // case and the case it names cannot drift apart.
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(DEFAULT_CASE_ID);
 
   const updateParam = useCallback((key: keyof ScanParams, value: number) => {
     if (key === "sliceCount") {
