@@ -1,6 +1,9 @@
 import type { Patient, Study } from "@/features/planning/domain/planning-session";
 
-/** Fictional identities used by the trainer. No real person is represented. */
+/**
+ * Entirely synthetic training placeholders. These identifiers were invented for
+ * the simulator and are not derived from any real person, patient, or study.
+ */
 export const EDUCATIONAL_PATIENT: Patient = {
   id: "2024-MR-00847",
   name: "DOE, JOHN",

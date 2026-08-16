@@ -34,8 +34,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Known advisories are accepted debt until Phase 10F.5 resolves them;
-      # keep the report visible in every run without failing the build.
-      - name: Security audit (non-blocking)
+      # High and critical advisories fail CI; lower severities remain visible
+      # without blocking routine development.
+      - name: Security audit (high severity threshold)
         run: npm audit --audit-level=high
-        continue-on-error: true
